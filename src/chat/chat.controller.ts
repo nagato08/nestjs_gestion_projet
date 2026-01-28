@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Body,
   Controller,
@@ -8,7 +7,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from 'src/auth/jwt.strategy';
 import { ChatService } from './chat.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -25,7 +24,7 @@ export class ChatController {
   ) {
     return await this.chatService.createConversation({
       createConversationDto,
-      userId: request.user.userId,
+      userId: request.user.id,
     });
   }
 
@@ -39,7 +38,7 @@ export class ChatController {
     return await this.chatService.sendChat({
       sendChatDto,
       conversationId,
-      senderId: request.user.userId,
+      senderId: request.user.id,
     });
   }
 
@@ -47,7 +46,7 @@ export class ChatController {
   @Get()
   async getConversations(@Request() request: RequestWithUser) {
     return await this.chatService.getConversations({
-      userId: request.user.userId,
+      userId: request.user.id,
     });
   }
 
@@ -59,7 +58,7 @@ export class ChatController {
   ) {
     return await this.chatService.getConversation({
       conversationId,
-      userId: request.user.userId,
+      userId: request.user.id,
     });
   }
 }

@@ -11,8 +11,10 @@ async function bootstrap() {
     .setTitle('Formation NestJS')
     .setVersion('1.0')
     .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, documentFactory);
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('swagger', app, document, {
+    swaggerUrl: 'swagger-json',
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

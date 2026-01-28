@@ -1,8 +1,16 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, StrategyOptions } from 'passport-jwt';
 
-export type UserPayload = { userId: string };
+export type UserPayload = {
+  sub: string;
+  id: string;
+  email: string;
+  role: string;
+  department: string;
+};
 export type RequestWithUser = {
   user: UserPayload;
 };
@@ -21,7 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    return { sub: payload.sub, email: payload.email };
+    return {
+      sub: payload.sub,
+      id: payload.sub, // Alias pour compatibilité avec req.user.id
+      email: payload.email,
+      role: payload.role,
+      department: payload.department,
+    };
   }
 }

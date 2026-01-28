@@ -1,17 +1,19 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// =========================================================
+// CONFIGURATION GÉNÉRALE
+// =========================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client-js"
   moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
 }
+
+// =========================================================
+// 1. MODÈLES DE TEST / EXEMPLES (SPORT)
+// =========================================================
 
 model Player {
   id        Int    @id @default(autoincrement())
@@ -40,38 +42,328 @@ model Position {
   players Player[]
 }
 
-model User{
-  id String @id @default(cuid())
-  firstName String @map("first_name")
-  lastName String @map("last_name")
-  email String @unique
-  password String
-  createdAt DateTime @default(now()) @map("created_at")
-  isResetPasswordRequested Boolean @default(false) @map("is_reset_password_requested")
-  resetPasswordToken String? @map("reset_password_token") @unique
+// =========================================================
+// 2. UTILISATEURS & AUTHENTIFICATION
+// =========================================================
 
-  conversations Conversation[]
-  sentMessages ChatMessage[]
-
+enum Role {
+  ADMIN
+  PROJECT_MANAGER
+  EMPLOYEE
 }
 
+enum Department {
+  IT
+  HR
+  FINANCE
+  MARKETING
+  SALES
+  OPERATIONS
+  ADMINISTRATION
+}
+
+model User {
+  id        String @id @default(cuid())
+  firstName String @map("first_name")
+  lastName  String @map("last_name")
+  email     String @unique
+  password  String
+
+  avatar    String?
+  jobTitle  String?
+  role      Role   @default(EMPLOYEE)
+  // 🏢 Département
+  department Department
+  
+  // ✅ Soft delete
+  deletedAt DateTime?
+
+  // Sécurité
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+  resetPasswordToken String? @unique
+  isResetPasswordRequested Boolean @default(false)
+
+
+  // Relations
+  projectsOwned   Project[]        @relation("ProjectOwner")
+  projectMembers  ProjectMember[]
+  taskAssignments TaskAssignment[]
+  timeEntries     TimeEntry[]
+  messages        Message[]
+  comments        Comment[]
+  notifications   Notification[]
+  documents       Document[]
+  conversations   Conversation[]
+  sentMessages    ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notificationSettings NotificationSettings[]
+
+  documentComments DocumentComment[]
+}
+
+// =========================================================
+// 3. PROJETS & MEMBRES
+// =========================================================
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id          String @id @default(cuid())
+  name        String
+  description String? @db.Text
+  objectives  String? @db.Text
+  priority    String
+  status      ProjectStatus @default(PLANNING)
+
+  startDate   DateTime
+  endDate     DateTime?
+
+  // Accès sécurisé
+  projectCode String @unique
+  inviteToken String @unique @default(cuid())
+
+  // Chef de projet
+  ownerId String
+  owner   User @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  // ✅ Soft delete
+  deletedAt DateTime?
+
+  // Relations
+  members    ProjectMember[]
+  tasks      Task[]
+  documents  Document[]
+  messages   Message[]
+
+  createdAt DateTime @default(now())
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  userId    String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+// =========================================================
+// 4. TÂCHES, SOUS-TÂCHES & DÉPENDANCES
+// =========================================================
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+}
+
+model Task {
+  id          String @id @default(cuid())
+  title       String
+  description String? @db.Text
+  priority    String
+  status      TaskStatus @default(TODO)
+  deadline    DateTime?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Sous-tâches
+  parentId String?
+  parent   Task?  @relation("SubTasks", fields: [parentId], references: [id])
+  subTasks Task[] @relation("SubTasks")
+
+  // Dépendances
+  dependencies TaskDependency[] @relation("BlockingTask")
+  blockedBy    TaskDependency[] @relation("BlockedTask")
+
+  assignments TaskAssignment[]
+  comments    Comment[]
+  timeEntries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaskDependency {
+  id             String @id @default(cuid())
+  blockingTaskId String
+  blockedTaskId  String
+
+  blockingTask Task @relation("BlockingTask", fields: [blockingTaskId], references: [id])
+  blockedTask  Task @relation("BlockedTask", fields: [blockedTaskId], references: [id])
+}
+
+model TaskAssignment {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+// =========================================================
+// 5. DOCUMENTS & VERSIONS
+// =========================================================
+
+model Document {
+  id        String @id @default(cuid())
+  name      String
+  projectId String
+  uploadedBy String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [uploadedBy], references: [id])
+
+  versions  DocumentVersion[]
+  comments  DocumentComment[]
+
+  createdAt DateTime @default(now())
+}
+
+model DocumentVersion {
+  id         String @id @default(cuid())
+  version    Int
+  fileUrl    String
+  documentId String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model DocumentComment {
+  id         String @id @default(cuid())
+  content    String @db.Text
+  documentId String
+  userId     String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// =========================================================
+// 6. COMMUNICATION & NOTIFICATIONS
+// =========================================================
+
+model Message {
+  id        String @id @default(cuid())
+  content   String @db.Text
+  projectId String
+  userId    String
+  mentions  String[]
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id        String @id @default(cuid())
+  content   String @db.Text
+  taskId    String
+  userId    String
+  mentions  String[]
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id      String @id @default(cuid())
+  type    String
+  content String
+  isRead  Boolean @default(false)
+  userId  String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// =========================================================
+// 7. SUIVI DU TEMPS
+// =========================================================
+
+model TimeEntry {
+  id        String @id @default(cuid())
+  taskId   String
+  userId   String
+
+  startTime DateTime @default(now())
+  endTime   DateTime?
+  duration  Int?
+  isManual  Boolean @default(false)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// =========================================================
+// 8. PARAMÈTRES & CONFIGURATION
+// =========================================================
+
+model CompanySettings {
+  id           String @id @default("global")
+  companyName  String?
+  logoUrl      String?
+  primaryColor String?
+}
+
+model NotificationSettings {
+  id        String @id @default(cuid())
+  userId    String @unique
+  email     Boolean @default(true)
+  realtime  Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// =========================================================
+// 9. CHAT TEMPS RÉEL (CONVERSATIONS)
+// =========================================================
+
 model Conversation {
-  id String @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  users User[]
-  messages ChatMessage[]
+  id        String @id @default(cuid())
+  users     User[]
+  messages  ChatMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChatMessage {
-  id String @id @default(cuid())
-  content String
-  createdAt DateTime @default(now()) @map("created_at")
-  sender User @relation(fields: [senderId], references: [id])
-  senderId String @map("sender_id")
-  conversation Conversation @relation(fields: [chatId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  chatId String @map("chat_id")
+  id             String @id @default(cuid())
+  content        String
+  senderId       String
+  conversationId String
 
-  @@index([chatId])
+  sender       User         @relation(fields: [senderId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
   @@index([senderId])
 }
