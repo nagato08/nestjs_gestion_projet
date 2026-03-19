@@ -19,7 +19,7 @@ export class CompanySettingsController {
 
   // 1️⃣ Récupérer les paramètres de l'entreprise (tous les utilisateurs)
   @Get()
-  @ApiOperation({ title: "Récupérer les paramètres de l'entreprise" })
+  @ApiOperation({ summary: "Récupérer les paramètres de l'entreprise" })
   getCompanySettings() {
     return this.companySettingsService.getCompanySettings();
   }
@@ -29,7 +29,7 @@ export class CompanySettingsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({
-    title: "Mettre à jour les paramètres de l'entreprise (Admin uniquement)",
+    summary: "Mettre à jour les paramètres de l'entreprise (Admin uniquement)",
   })
   updateCompanySettings(
     @Req() req: any,

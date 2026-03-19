@@ -16,35 +16,39 @@ import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDTO } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-// import { AuthGuard } from '@nestjs/passport'; // Removed as it's not used
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  @ApiOperation({ title: 'Inscrire un utilisateur' })
+  @ApiOperation({ summary: 'Inscrire un utilisateur' })
   async register(@Body() CreateUserDto: CreateUserDto) {
     return this.authService.register(CreateUserDto);
   }
 
   @Post('login')
-  @ApiOperation({ title: 'Connecter un utilisateur' })
+  @ApiOperation({ summary: 'Connecter un utilisateur' })
   async login(@Body() loginDto: LoginDTO) {
     return this.authService.login(loginDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  @ApiOperation({ title: "Profile d'un utilisateur" })
+  @ApiOperation({ summary: "Profile d'un utilisateur" })
   async getProfile(@Request() req) {
     return this.authService.validateUser(req.user.sub);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @Get('users')
+  @ApiOperation({ summary: 'Liste des utilisateurs (réservé aux admins)' })
   async getAllUsers() {
     return this.authService.getAllUsers();
   }

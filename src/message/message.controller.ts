@@ -23,7 +23,7 @@ export class MessageController {
 
   // 1️⃣ Créer un message dans un projet
   @Post('project/:projectId')
-  @ApiOperation({ title: 'Créer un message dans un projet' })
+  @ApiOperation({ summary: 'Créer un message dans un projet' })
   create(
     @Param('projectId') projectId: string,
     @Req() req: any,
@@ -38,21 +38,21 @@ export class MessageController {
 
   // 2️⃣ Récupérer tous les messages d'un projet
   @Get('project/:projectId')
-  @ApiOperation({ title: "Récupérer tous les messages d'un projet" })
+  @ApiOperation({ summary: "Récupérer tous les messages d'un projet" })
   getMessagesByProject(@Param('projectId') projectId: string, @Req() req: any) {
     return this.messageService.getMessagesByProject(projectId, req.user.id);
   }
 
   // 3️⃣ Récupérer un message par ID
   @Get(':id')
-  @ApiOperation({ title: 'Récupérer un message par ID' })
+  @ApiOperation({ summary: 'Récupérer un message par ID' })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.messageService.getMessageById(id, req.user.id);
   }
 
   // 4️⃣ Supprimer un message
   @Delete(':id')
-  @ApiOperation({ title: 'Supprimer un message' })
+  @ApiOperation({ summary: 'Supprimer un message' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.messageService.deleteMessage(id, req.user.id);
   }

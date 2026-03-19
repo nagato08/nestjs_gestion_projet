@@ -1,22 +1,3 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `chat_id` on the `ChatMessage` table. All the data in the column will be lost.
-  - You are about to drop the column `created_at` on the `ChatMessage` table. All the data in the column will be lost.
-  - You are about to drop the column `sender_id` on the `ChatMessage` table. All the data in the column will be lost.
-  - You are about to drop the column `created_at` on the `Conversation` table. All the data in the column will be lost.
-  - You are about to drop the column `updated_at` on the `Conversation` table. All the data in the column will be lost.
-  - You are about to drop the column `created_at` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the column `is_reset_password_requested` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the column `reset_password_token` on the `User` table. All the data in the column will be lost.
-  - A unique constraint covering the columns `[resetPasswordToken]` on the table `User` will be added. If there are existing duplicate values, this will fail.
-  - Added the required column `conversationId` to the `ChatMessage` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `senderId` to the `ChatMessage` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `updatedAt` to the `Conversation` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `department` to the `User` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `updatedAt` to the `User` table without a default value. This is not possible if the table is not empty.
-
-*/
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'PROJECT_MANAGER', 'EMPLOYEE');
 
@@ -29,49 +10,27 @@ CREATE TYPE "ProjectStatus" AS ENUM ('PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED
 -- CreateEnum
 CREATE TYPE "TaskStatus" AS ENUM ('TODO', 'DOING', 'DONE');
 
--- DropForeignKey
-ALTER TABLE "ChatMessage" DROP CONSTRAINT "ChatMessage_chat_id_fkey";
+-- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "first_name" TEXT NOT NULL,
+    "last_name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "avatar" TEXT,
+    "jobTitle" TEXT,
+    "role" "Role" NOT NULL DEFAULT 'EMPLOYEE',
+    "department" "Department" NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+    "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "twoFactorSecret" TEXT,
+    "resetPasswordToken" TEXT,
+    "isResetPasswordRequested" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
--- DropForeignKey
-ALTER TABLE "ChatMessage" DROP CONSTRAINT "ChatMessage_sender_id_fkey";
-
--- DropIndex
-DROP INDEX "ChatMessage_chat_id_idx";
-
--- DropIndex
-DROP INDEX "ChatMessage_sender_id_idx";
-
--- DropIndex
-DROP INDEX "User_reset_password_token_key";
-
--- AlterTable
-ALTER TABLE "ChatMessage" DROP COLUMN "chat_id",
-DROP COLUMN "created_at",
-DROP COLUMN "sender_id",
-ADD COLUMN     "conversationId" TEXT NOT NULL,
-ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "senderId" TEXT NOT NULL;
-
--- AlterTable
-ALTER TABLE "Conversation" DROP COLUMN "created_at",
-DROP COLUMN "updated_at",
-ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
-
--- AlterTable
-ALTER TABLE "User" DROP COLUMN "created_at",
-DROP COLUMN "is_reset_password_requested",
-DROP COLUMN "reset_password_token",
-ADD COLUMN     "avatar" TEXT,
-ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "department" "Department" NOT NULL,
-ADD COLUMN     "isResetPasswordRequested" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "jobTitle" TEXT,
-ADD COLUMN     "resetPasswordToken" TEXT,
-ADD COLUMN     "role" "Role" NOT NULL DEFAULT 'EMPLOYEE',
-ADD COLUMN     "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "twoFactorSecret" TEXT,
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "Project" (
@@ -86,6 +45,7 @@ CREATE TABLE "Project" (
     "projectCode" TEXT NOT NULL,
     "inviteToken" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
+    "deletedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Project_pkey" PRIMARY KEY ("id")
@@ -238,6 +198,40 @@ CREATE TABLE "NotificationSettings" (
     CONSTRAINT "NotificationSettings_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Conversation" (
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Conversation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChatMessage" (
+    "id" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "senderId" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ChatMessage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "_ConversationToUser" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_ConversationToUser_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_resetPasswordToken_key" ON "User"("resetPasswordToken");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Project_projectCode_key" ON "Project"("projectCode");
 
@@ -260,7 +254,7 @@ CREATE INDEX "ChatMessage_conversationId_idx" ON "ChatMessage"("conversationId")
 CREATE INDEX "ChatMessage_senderId_idx" ON "ChatMessage"("senderId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_resetPasswordToken_key" ON "User"("resetPasswordToken");
+CREATE INDEX "_ConversationToUser_B_index" ON "_ConversationToUser"("B");
 
 -- AddForeignKey
 ALTER TABLE "Project" ADD CONSTRAINT "Project_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -333,3 +327,9 @@ ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_senderId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ConversationToUser" ADD CONSTRAINT "_ConversationToUser_A_fkey" FOREIGN KEY ("A") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ConversationToUser" ADD CONSTRAINT "_ConversationToUser_B_fkey" FOREIGN KEY ("B") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

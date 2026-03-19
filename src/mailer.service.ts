@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { Logger } from '@nestjs/common';
 import { Resend } from 'resend';
 
 export class MailerService {
+  private readonly logger = new Logger(MailerService.name);
   private readonly mailer: Resend;
+
   constructor() {
     this.mailer = new Resend(process.env.RESEND_API_KEY);
   }
@@ -20,10 +24,10 @@ export class MailerService {
         subject: 'Bienvenue sur la plateforme',
         html: `Bonjour ${firstName} et bienvenue dans notre application, <strong>It works!</strong>`,
       });
-
-      console.log({ data });
+      this.logger.log(`Email envoyé à ${recipient}`);
     } catch (error) {
-      console.log(error);
+      this.logger.error('sendEmailFromRegister', error);
+      throw error;
     }
   }
 
@@ -46,10 +50,10 @@ export class MailerService {
         subject: 'Pour reinitialiser votre mot de passe',
         html: `Bonjour ${firstName}, voici votre lien de réinitialisation de mot de passe, ${link}`,
       });
-
-      console.log({ data });
+      this.logger.log(`Email reset password envoyé à ${recipient}`);
     } catch (error) {
-      console.log(error);
+      this.logger.error('sendRequestPasswordEmail', error);
+      throw error;
     }
   }
 }

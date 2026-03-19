@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/require-await */
-import { Global, OnModuleInit } from '@nestjs/common';
+import { Global, Logger, OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -19,6 +19,8 @@ import { PrismaService } from './prisma.service';
   namespace: '/',
 })
 export class AppGateway implements OnGatewayInit, OnModuleInit {
+  private readonly logger = new Logger(AppGateway.name);
+
   @WebSocketServer()
   private readonly server: Server;
 
@@ -56,7 +58,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
 
   @SubscribeMessage('test')
   async sendMessage(@MessageBody() data, @ConnectedSocket() socket: Socket) {
-    console.log(data);
+    this.logger.debug(data);
     socket.emit('chat', "Salut j'ai bien reçu ton message");
   }
 
@@ -65,7 +67,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
     @MessageBody() conversationId: string,
     @ConnectedSocket() socket: Socket,
   ) {
-    console.log({ conversationId });
+    this.logger.debug({ conversationId });
     socket.join(conversationId);
   }
 
@@ -106,31 +108,42 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
       return;
     }
 
-    // Rejoindre la room du projet pour recevoir les messages
+    // Rejoindre la room du projet pour recevoir le chat
     socket.join(`project:${projectId}`);
     socket.emit('joined-project-room', { projectId });
 
-    // Envoyer les messages récents du projet
-    const messages = await this.prisma.message.findMany({
-      where: { projectId },
-      include: {
-        user: {
+    // Historique du chat projet (Conversation / ChatMessage). Prisma client pas régénéré (projectId sur Conversation).
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { projectId } as any,
+      select: {
+        id: true,
+        messages: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            email: true,
+            content: true,
+            createdAt: true,
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
           },
+          orderBy: { createdAt: 'asc' as const },
+          take: 100,
         },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 50, // Derniers 50 messages
-    });
+    } as any);
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 
-    socket.emit('project-messages-history', {
+    const messages =
+      (conversation as { messages?: unknown[] } | null)?.messages ?? [];
+    socket.emit('project-chat-history', {
       projectId,
-      messages: messages.reverse(), // Inverser pour avoir l'ordre chronologique
+      messages,
     });
   }
 

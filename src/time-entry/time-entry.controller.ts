@@ -25,28 +25,28 @@ export class TimeEntryController {
 
   // 1️⃣ Démarrer un timer
   @Post('start')
-  @ApiOperation({ title: 'Démarrer un timer pour une tâche' })
+  @ApiOperation({ summary: 'Démarrer un timer pour une tâche' })
   startTimer(@Req() req: any, @Body() startTimerDto: StartTimerDto) {
     return this.timeEntryService.startTimer(req.user.id, startTimerDto);
   }
 
   // 2️⃣ Arrêter le timer actif
   @Post('stop')
-  @ApiOperation({ title: 'Arrêter le timer actif' })
+  @ApiOperation({ summary: 'Arrêter le timer actif' })
   stopTimer(@Req() req: any) {
     return this.timeEntryService.stopTimer(req.user.id);
   }
 
   // 3️⃣ Récupérer le timer actif
   @Get('active')
-  @ApiOperation({ title: 'Récupérer le timer actif' })
+  @ApiOperation({ summary: 'Récupérer le timer actif' })
   getActiveTimer(@Req() req: any) {
     return this.timeEntryService.getActiveTimerForUser(req.user.id);
   }
 
   // 4️⃣ Créer une entrée de temps manuelle
   @Post('manual')
-  @ApiOperation({ title: 'Créer une entrée de temps manuelle' })
+  @ApiOperation({ summary: 'Créer une entrée de temps manuelle' })
   createManual(
     @Req() req: any,
     @Body() createManualTimeEntryDto: CreateManualTimeEntryDto,
@@ -59,7 +59,7 @@ export class TimeEntryController {
 
   // 5️⃣ Récupérer mes entrées de temps
   @Get('my-entries')
-  @ApiOperation({ title: 'Récupérer mes entrées de temps' })
+  @ApiOperation({ summary: 'Récupérer mes entrées de temps' })
   getMyTimeEntries(
     @Req() req: any,
     @Query('taskId') taskId?: string,
@@ -74,21 +74,21 @@ export class TimeEntryController {
 
   // 6️⃣ Récupérer mes statistiques de temps
   @Get('my-stats')
-  @ApiOperation({ title: 'Récupérer mes statistiques de temps' })
+  @ApiOperation({ summary: 'Récupérer mes statistiques de temps' })
   getMyTimeStats(@Req() req: any, @Query('projectId') projectId?: string) {
     return this.timeEntryService.getMyTimeStats(req.user.id, projectId);
   }
 
   // 7️⃣ Récupérer les statistiques de temps d'un projet
   @Get('project/:projectId/stats')
-  @ApiOperation({ title: "Récupérer les statistiques de temps d'un projet" })
+  @ApiOperation({ summary: "Récupérer les statistiques de temps d'un projet" })
   getProjectTimeStats(@Param('projectId') projectId: string, @Req() req: any) {
     return this.timeEntryService.getProjectTimeStats(projectId, req.user.id);
   }
 
   // 8️⃣ Supprimer une entrée de temps
   @Delete(':id')
-  @ApiOperation({ title: 'Supprimer une entrée de temps' })
+  @ApiOperation({ summary: 'Supprimer une entrée de temps' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.timeEntryService.deleteTimeEntry(id, req.user.id);
   }

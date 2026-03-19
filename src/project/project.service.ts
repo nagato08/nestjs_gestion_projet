@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ConflictException,
@@ -66,6 +64,11 @@ export class ProjectService {
       // On ajoute l'owner comme membre par défaut
       await tx.projectMember.create({
         data: { projectId: project.id, userId: ownerId },
+      });
+
+      // Créer automatiquement le canal de chat du projet
+      await tx.conversation.create({
+        data: { projectId: project.id } as any,
       });
 
       return project;

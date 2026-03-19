@@ -31,28 +31,28 @@ export class ProjectController {
   // 1. SEULS ADMIN ET PM PEUVENT CRÉER
   @Post()
   @Roles(Role.ADMIN, Role.PROJECT_MANAGER)
-  @ApiOperation({ title: 'Créer un nouveau projet' })
+  @ApiOperation({ summary: 'Créer un nouveau projet' })
   create(@Req() req: any, @Body() createProjectDto: CreateProjectDto) {
     return this.projectService.createProject(req.user.id, createProjectDto);
   }
 
   // 2. TOUT LE MONDE PEUT VOIR SES PROJETS
   @Get('my-projects')
-  @ApiOperation({ title: 'Récupérer mes projets (membre ou owner)' })
+  @ApiOperation({ summary: 'Récupérer mes projets (membre ou owner)' })
   findMyProjects(@Req() req: any) {
     return this.projectService.getMyProjects(req.user.id);
   }
 
   // 3. TOUT LE MONDE PEUT VOIR UN PROJET (le service vérifiera s'il est membre)
   @Get(':id')
-  @ApiOperation({ title: 'Détails d’un projet spécifique' })
+  @ApiOperation({ summary: 'Détails d’un projet spécifique' })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.projectService.getProjectById(id, req.user.id);
   }
 
   // 4. LE SERVICE VÉRIFIERA SI L'USER EST OWNER
   @Patch(':id')
-  @ApiOperation({ title: 'Mettre à jour un projet (Owner uniquement)' })
+  @ApiOperation({ summary: 'Mettre à jour un projet (Owner uniquement)' })
   update(
     @Param('id') id: string,
     @Req() req: any,
@@ -62,7 +62,7 @@ export class ProjectController {
   }
 
   @Post(':id/members')
-  @ApiOperation({ title: 'Ajouter un membre (Owner uniquement)' })
+  @ApiOperation({ summary: 'Ajouter un membre (Owner uniquement)' })
   addMember(
     @Param('id') id: string,
     @Req() req: any,
@@ -72,7 +72,7 @@ export class ProjectController {
   }
 
   @Delete(':id/members')
-  @ApiOperation({ title: 'Retirer un membre (Owner uniquement)' })
+  @ApiOperation({ summary: 'Retirer un membre (Owner uniquement)' })
   removeMember(
     @Param('id') id: string,
     @Req() req: any,
@@ -87,19 +87,19 @@ export class ProjectController {
 
   // 5. TOUT LE MONDE PEUT REJOINDRE
   @Post('join/code')
-  @ApiOperation({ title: 'Rejoindre via code' })
+  @ApiOperation({ summary: 'Rejoindre via code' })
   joinByCode(@Body('projectCode') projectCode: string, @Req() req: any) {
     return this.projectService.joinByProjectCode(projectCode, req.user.id);
   }
 
   @Post('join/token')
-  @ApiOperation({ title: 'Rejoindre via token' })
+  @ApiOperation({ summary: 'Rejoindre via token' })
   joinByToken(@Body('inviteToken') inviteToken: string, @Req() req: any) {
     return this.projectService.joinByInviteToken(inviteToken, req.user.id);
   }
 
   @Patch(':id/regenerate-token')
-  @ApiOperation({ title: 'Régénérer le token (Owner uniquement)' })
+  @ApiOperation({ summary: 'Régénérer le token (Owner uniquement)' })
   regenerateToken(@Param('id') id: string, @Req() req: any) {
     return this.projectService.regenerateInviteToken(id, req.user.id);
   }
@@ -107,7 +107,7 @@ export class ProjectController {
   // 🔟 Supprimer un projet (soft delete)
   @Delete(':id')
   @ApiOperation({
-    title: 'Supprimer un projet (soft delete - Owner ou Admin uniquement)',
+    summary: 'Supprimer un projet (soft delete - Owner ou Admin uniquement)',
   })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.projectService.deleteProject(id, req.user.id);

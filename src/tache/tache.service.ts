@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   ConflictException,
   ForbiddenException,
@@ -128,25 +127,30 @@ export class TacheService {
       }
     }
 
+    const createData = {
+      title: dto.title,
+      description: dto.description,
+      priority: dto.priority,
+      deadline: dto.deadline ? new Date(dto.deadline) : null,
+      startDate: dto.startDate ? new Date(dto.startDate) : null,
+      endDate: dto.endDate ? new Date(dto.endDate) : null,
+      optimisticDays: dto.optimisticDays ?? null,
+      probableDays: dto.probableDays ?? null,
+      pessimisticDays: dto.pessimisticDays ?? null,
+      storyPoints: dto.storyPoints ?? null,
+      projectId: dto.projectId,
+      parentId: dto.parentId,
+      status: TaskStatus.TODO,
+      assignments:
+        dto.assignedUserIds && dto.assignedUserIds.length > 0
+          ? {
+              create: dto.assignedUserIds.map((userId) => ({ userId })),
+            }
+          : undefined,
+    };
+
     const task = await this.prisma.task.create({
-      data: {
-        title: dto.title,
-        description: dto.description,
-        priority: dto.priority,
-        deadline: dto.deadline ? new Date(dto.deadline) : null,
-        projectId: dto.projectId,
-        parentId: dto.parentId,
-        status: TaskStatus.TODO,
-        // Assigner les utilisateurs si fournis
-        assignments:
-          dto.assignedUserIds && dto.assignedUserIds.length > 0
-            ? {
-                create: dto.assignedUserIds.map((userId) => ({
-                  userId,
-                })),
-              }
-            : undefined,
-      },
+      data: createData as any,
       include: {
         project: {
           select: { id: true, name: true },
@@ -370,6 +374,24 @@ export class TacheService {
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.deadline !== undefined) {
       updateData.deadline = dto.deadline ? new Date(dto.deadline) : null;
+    }
+    if (dto.startDate !== undefined) {
+      updateData.startDate = dto.startDate ? new Date(dto.startDate) : null;
+    }
+    if (dto.endDate !== undefined) {
+      updateData.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    }
+    if (dto.optimisticDays !== undefined) {
+      updateData.optimisticDays = dto.optimisticDays;
+    }
+    if (dto.probableDays !== undefined) {
+      updateData.probableDays = dto.probableDays;
+    }
+    if (dto.pessimisticDays !== undefined) {
+      updateData.pessimisticDays = dto.pessimisticDays;
+    }
+    if (dto.storyPoints !== undefined) {
+      updateData.storyPoints = dto.storyPoints;
     }
 
     const updatedTask = await this.prisma.task.update({

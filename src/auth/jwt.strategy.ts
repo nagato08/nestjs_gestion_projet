@@ -18,13 +18,17 @@ export type RequestWithUser = {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error(
+        'JWT_SECRET doit être défini dans les variables d’environnement.',
+      );
+    }
     const options: StrategyOptions = {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || 'ZO44bPd3LB6SdTgaLo7I9OIxQSKfp1_u3l_ri6hJmXw',
+      secretOrKey: secret,
     };
-
     super(options);
   }
 

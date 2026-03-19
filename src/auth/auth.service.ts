@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -17,6 +18,8 @@ import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private jwtService: JwtService,
@@ -232,9 +235,9 @@ export class AuthService {
         error: false,
         message: 'Demande de réinitialisation de mot de passe envoyée',
       };
-      // return this.validateUser(userId);
     } catch (error) {
-      console.log(error);
+      this.logger.error('resetUserPasswordRequest', error);
+      throw error;
     }
   }
 
@@ -259,9 +262,9 @@ export class AuthService {
         message:
           'le token est valide, vous pouvez réinitialiser votre mot de passe',
       };
-      // return this.validateUser(userId);
     } catch (error) {
-      console.log(error);
+      this.logger.error('verifyResetPasswordToken', error);
+      throw error;
     }
   }
 
@@ -300,9 +303,9 @@ export class AuthService {
         error: false,
         message: 'Mot de passe réinitialisé avec succès',
       };
-      // return this.validateUser(userId);
     } catch (error) {
-      console.log(error);
+      this.logger.error('resetUserPassword', error);
+      throw error;
     }
   }
 

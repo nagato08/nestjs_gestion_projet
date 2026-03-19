@@ -25,14 +25,14 @@ export class NotificationController {
 
   // 1️⃣ Créer une notification (pour les admins ou système)
   @Post()
-  @ApiOperation({ title: 'Créer une notification' })
+  @ApiOperation({ summary: 'Créer une notification' })
   create(@Body() createNotificationDto: CreateNotificationDto) {
     return this.notificationService.createNotification(createNotificationDto);
   }
 
   // 2️⃣ Récupérer mes notifications
   @Get()
-  @ApiOperation({ title: 'Récupérer mes notifications' })
+  @ApiOperation({ summary: 'Récupérer mes notifications' })
   getMyNotifications(
     @Req() req: any,
     @Query('unreadOnly') unreadOnly?: string,
@@ -43,28 +43,28 @@ export class NotificationController {
 
   // 3️⃣ Compter les notifications non lues
   @Get('unread-count')
-  @ApiOperation({ title: 'Compter mes notifications non lues' })
+  @ApiOperation({ summary: 'Compter mes notifications non lues' })
   getUnreadCount(@Req() req: any) {
     return this.notificationService.getUnreadCount(req.user.id);
   }
 
   // 4️⃣ Marquer une notification comme lue
   @Patch(':id/read')
-  @ApiOperation({ title: 'Marquer une notification comme lue' })
+  @ApiOperation({ summary: 'Marquer une notification comme lue' })
   markAsRead(@Param('id') id: string, @Req() req: any) {
     return this.notificationService.markAsRead(id, req.user.id);
   }
 
   // 5️⃣ Marquer toutes les notifications comme lues
   @Patch('read-all')
-  @ApiOperation({ title: 'Marquer toutes mes notifications comme lues' })
+  @ApiOperation({ summary: 'Marquer toutes mes notifications comme lues' })
   markAllAsRead(@Req() req: any) {
     return this.notificationService.markAllAsRead(req.user.id);
   }
 
   // 6️⃣ Supprimer une notification
   @Delete(':id')
-  @ApiOperation({ title: 'Supprimer une notification' })
+  @ApiOperation({ summary: 'Supprimer une notification' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.notificationService.deleteNotification(id, req.user.id);
   }

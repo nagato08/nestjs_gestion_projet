@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Controller,
   Get,
@@ -16,6 +15,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { DocumentService } from './document.service';
@@ -31,14 +31,18 @@ export class DocumentController {
 
   // 1️⃣ Créer un document (métadonnées uniquement)
   @Post()
-  @ApiOperation({ title: 'Créer un nouveau document (métadonnées)' })
+  @ApiOperation({ summary: 'Créer un nouveau document (métadonnées)' })
   create(@Req() req: any, @Body() createDocumentDto: CreateDocumentDto) {
     return this.documentService.createDocument(req.user.id, createDocumentDto);
   }
 
   // 2️⃣ Uploader une version d'un document
   @Post(':id/versions')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   // @ApiBody({
   //   schema: {
@@ -51,7 +55,7 @@ export class DocumentController {
   //     },
   //   },
   // })
-  @ApiOperation({ title: "Uploader une nouvelle version d'un document" })
+  @ApiOperation({ summary: "Uploader une nouvelle version d'un document" })
   uploadVersion(
     @Param('id') id: string,
     @Req() req: any,
@@ -65,7 +69,7 @@ export class DocumentController {
 
   // 3️⃣ Récupérer tous les documents d'un projet
   @Get('project/:projectId')
-  @ApiOperation({ title: "Récupérer tous les documents d'un projet" })
+  @ApiOperation({ summary: "Récupérer tous les documents d'un projet" })
   getDocumentsByProject(
     @Param('projectId') projectId: string,
     @Req() req: any,
@@ -75,21 +79,21 @@ export class DocumentController {
 
   // 4️⃣ Récupérer mes documents (tous projets)
   @Get('my-documents')
-  @ApiOperation({ title: 'Récupérer tous mes documents' })
+  @ApiOperation({ summary: 'Récupérer tous mes documents' })
   getMyDocuments(@Req() req: any) {
     return this.documentService.getMyDocuments(req.user.id);
   }
 
   // 5️⃣ Récupérer un document par ID avec toutes ses versions
   @Get(':id')
-  @ApiOperation({ title: "Récupérer les détails d'un document" })
+  @ApiOperation({ summary: "Récupérer les détails d'un document" })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.documentService.getDocumentById(id, req.user.id);
   }
 
   // 6️⃣ Mettre à jour un document (nom)
   @Patch(':id')
-  @ApiOperation({ title: 'Mettre à jour un document' })
+  @ApiOperation({ summary: 'Mettre à jour un document' })
   update(
     @Param('id') id: string,
     @Req() req: any,
@@ -104,7 +108,7 @@ export class DocumentController {
 
   // 7️⃣ Supprimer un document
   @Delete(':id')
-  @ApiOperation({ title: 'Supprimer un document' })
+  @ApiOperation({ summary: 'Supprimer un document' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.documentService.deleteDocument(id, req.user.id);
   }
@@ -112,7 +116,7 @@ export class DocumentController {
   // 8️⃣ Récupérer l'historique des versions d'un document
   @Get(':id/versions')
   @ApiOperation({
-    title: "Récupérer l'historique des versions d'un document",
+    summary: "Récupérer l'historique des versions d'un document",
   })
   getVersions(@Param('id') id: string, @Req() req: any) {
     return this.documentService.getDocumentVersions(id, req.user.id);
@@ -120,7 +124,7 @@ export class DocumentController {
 
   // 9️⃣ Récupérer une version spécifique d'un document
   @Get(':id/versions/:version')
-  @ApiOperation({ title: "Récupérer une version spécifique d'un document" })
+  @ApiOperation({ summary: "Récupérer une version spécifique d'un document" })
   getVersion(
     @Param('id') id: string,
     @Param('version', ParseIntPipe) version: number,
@@ -131,7 +135,7 @@ export class DocumentController {
 
   // 🔟 Créer un commentaire sur un document
   @Post(':id/comments')
-  @ApiOperation({ title: 'Ajouter un commentaire à un document' })
+  @ApiOperation({ summary: 'Ajouter un commentaire à un document' })
   createComment(
     @Param('id') id: string,
     @Req() req: any,
@@ -146,7 +150,7 @@ export class DocumentController {
 
   // 1️⃣1️⃣ Supprimer un commentaire
   @Delete('comments/:commentId')
-  @ApiOperation({ title: 'Supprimer un commentaire' })
+  @ApiOperation({ summary: 'Supprimer un commentaire' })
   deleteComment(@Param('commentId') commentId: string, @Req() req: any) {
     return this.documentService.deleteDocumentComment(commentId, req.user.id);
   }

@@ -13,7 +13,12 @@
 // }
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -27,6 +32,8 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor() {
     // 1. Création du pool de connexion avec la lib 'pg'
     const pool = new Pool({
@@ -38,16 +45,16 @@ export class PrismaService
 
     // 3. Passage de l'adapter au constructeur parent
     super({ adapter });
-
-    console.log('🚀 PrismaService instancié avec Driver Adapter');
+    this.logger.log('PrismaService instancié avec Driver Adapter');
   }
 
   async onModuleInit() {
     try {
       await this.$connect();
-      console.log('✅ Connexion à la base de données réussie');
+      this.logger.log('Connexion à la base de données réussie');
     } catch (error) {
-      console.error('❌ Erreur de connexion DB dans onModuleInit:', error);
+      this.logger.error('Erreur de connexion DB dans onModuleInit', error);
+      throw error;
     }
   }
 

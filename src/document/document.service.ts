@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   ForbiddenException,
@@ -11,6 +9,7 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateDocumentCommentDto } from './dto/create-document-comment.dto';
 import { Role } from '@prisma/client';
+import { CloudinaryService } from '../cloudinary.service';
 
 // Type pour les fichiers uploadés via Multer
 type MulterFile = {
@@ -27,7 +26,10 @@ type MulterFile = {
 
 @Injectable()
 export class DocumentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
+  ) {}
 
   /**
    * UTILITAIRE : Vérifie que l'utilisateur est membre du projet
@@ -190,10 +192,12 @@ export class DocumentService {
     const nextVersion =
       document.versions.length > 0 ? document.versions[0].version + 1 : 1;
 
-    // TODO: Ici, vous devriez uploader le fichier vers S3, Cloudinary, ou un autre service de stockage
-    // Pour l'instant, on simule avec une URL
-    // En production, utilisez : const fileUrl = await this.uploadToStorage(file);
-    const fileUrl = `/uploads/documents/${documentId}/v${nextVersion}/${file.originalname}`;
+    // Upload réel sur Cloudinary (ou autre fournisseur) à partir du buffer en mémoire
+    const uploadResult = await this.cloudinary.uploadDocument(file as any, {
+      folder: `${process.env.CLOUDINARY_FOLDER ?? 'gestion-projets/documents'}/${documentId}/v${nextVersion}`,
+    });
+
+    const fileUrl = uploadResult.url;
 
     const version = await this.prisma.documentVersion.create({
       data: {

@@ -29,7 +29,7 @@ export class TacheController {
 
   // 1️⃣ Créer une tâche
   @Post()
-  @ApiOperation({ title: 'Créer une nouvelle tâche' })
+  @ApiOperation({ summary: 'Créer une nouvelle tâche' })
   create(@Req() req: any, @Body() createTaskDto: CreateTaskDto) {
     return this.tacheService.createTask(req.user.id, createTaskDto);
   }
@@ -37,7 +37,7 @@ export class TacheController {
   // 2️⃣ Récupérer toutes les tâches d'un projet (pour Kanban)
   @Get('project/:projectId')
   @ApiOperation({
-    title: "Récupérer toutes les tâches d'un projet (pour tableau Kanban)",
+    summary: "Récupérer toutes les tâches d'un projet (pour tableau Kanban)",
   })
   getTasksByProject(@Param('projectId') projectId: string, @Req() req: any) {
     return this.tacheService.getTasksByProject(projectId, req.user.id);
@@ -45,21 +45,21 @@ export class TacheController {
 
   // 3️⃣ Récupérer mes tâches assignées
   @Get('my-tasks')
-  @ApiOperation({ title: 'Récupérer toutes mes tâches assignées' })
+  @ApiOperation({ summary: 'Récupérer toutes mes tâches assignées' })
   getMyTasks(@Req() req: any) {
     return this.tacheService.getMyTasks(req.user.id);
   }
 
   // 4️⃣ Récupérer une tâche par ID
   @Get(':id')
-  @ApiOperation({ title: "Récupérer les détails d'une tâche" })
+  @ApiOperation({ summary: "Récupérer les détails d'une tâche" })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.tacheService.getTaskById(id, req.user.id);
   }
 
   // 5️⃣ Mettre à jour une tâche
   @Patch(':id')
-  @ApiOperation({ title: 'Mettre à jour une tâche' })
+  @ApiOperation({ summary: 'Mettre à jour une tâche' })
   update(
     @Param('id') id: string,
     @Req() req: any,
@@ -70,7 +70,7 @@ export class TacheController {
 
   // 6️⃣ Supprimer une tâche
   @Delete(':id')
-  @ApiOperation({ title: 'Supprimer une tâche' })
+  @ApiOperation({ summary: 'Supprimer une tâche' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.tacheService.deleteTask(id, req.user.id);
   }
@@ -78,7 +78,7 @@ export class TacheController {
   // 7️⃣ Changer le statut d'une tâche (pour Kanban)
   @Patch(':id/status')
   @ApiOperation({
-    title: "Changer le statut d'une tâche (TODO → DOING → DONE)",
+    summary: "Changer le statut d'une tâche (TODO → DOING → DONE)",
   })
   changeStatus(
     @Param('id') id: string,
@@ -95,7 +95,7 @@ export class TacheController {
   // 8️⃣ Assigner des utilisateurs à une tâche
   @Post(':id/assign')
   @ApiOperation({
-    title: 'Assigner un ou plusieurs utilisateurs à une tâche',
+    summary: 'Assigner un ou plusieurs utilisateurs à une tâche',
   })
   assignUsers(
     @Param('id') id: string,
@@ -107,7 +107,7 @@ export class TacheController {
 
   // 9️⃣ Retirer un utilisateur d'une tâche
   @Delete(':id/assign/:userId')
-  @ApiOperation({ title: "Retirer un utilisateur d'une tâche" })
+  @ApiOperation({ summary: "Retirer un utilisateur d'une tâche" })
   unassignUser(
     @Param('id') id: string,
     @Param('userId') userId: string,
@@ -119,7 +119,7 @@ export class TacheController {
   // 🔟 Créer une dépendance entre tâches
   @Post(':id/dependencies')
   @ApiOperation({
-    title: 'Créer une dépendance : cette tâche bloque une autre tâche',
+    summary: 'Créer une dépendance : cette tâche bloque une autre tâche',
   })
   createDependency(
     @Param('id') id: string,
@@ -135,7 +135,7 @@ export class TacheController {
 
   // 1️⃣1️⃣ Supprimer une dépendance
   @Delete(':id/dependencies/:blockedTaskId')
-  @ApiOperation({ title: 'Supprimer une dépendance entre tâches' })
+  @ApiOperation({ summary: 'Supprimer une dépendance entre tâches' })
   deleteDependency(
     @Param('id') id: string,
     @Param('blockedTaskId') blockedTaskId: string,
@@ -150,7 +150,7 @@ export class TacheController {
 
   // 1️⃣2️⃣ Créer un commentaire sur une tâche
   @Post(':id/comments')
-  @ApiOperation({ title: 'Ajouter un commentaire à une tâche' })
+  @ApiOperation({ summary: 'Ajouter un commentaire à une tâche' })
   createComment(
     @Param('id') id: string,
     @Req() req: any,
@@ -161,7 +161,7 @@ export class TacheController {
 
   // 1️⃣3️⃣ Supprimer un commentaire
   @Delete('comments/:commentId')
-  @ApiOperation({ title: 'Supprimer un commentaire' })
+  @ApiOperation({ summary: 'Supprimer un commentaire' })
   deleteComment(@Param('commentId') commentId: string, @Req() req: any) {
     return this.tacheService.deleteComment(commentId, req.user.id);
   }

@@ -12,37 +12,6 @@ datasource db {
 }
 
 // =========================================================
-// 1. MODÈLES DE TEST / EXEMPLES (SPORT)
-// =========================================================
-
-model Player {
-  id        Int    @id @default(autoincrement())
-  firstName String @map("first_name")
-  lastName  String @map("last_name")
-
-  teamId Int  @map("team_id")
-  team   Team @relation(fields: [teamId], references: [id])
-
-  positionId Int      @map("position_id")
-  position   Position @relation(fields: [positionId], references: [id])
-}
-
-model Team {
-  id      Int     @id @default(autoincrement())
-  name    String
-  country String?
-
-  players Player[]
-}
-
-model Position {
-  id   Int    @id @default(autoincrement())
-  name String
-
-  players Player[]
-}
-
-// =========================================================
 // 2. UTILISATEURS & AUTHENTIFICATION
 // =========================================================
 
@@ -94,7 +63,6 @@ model User {
   comments        Comment[]
   notifications   Notification[]
   documents       Document[]
-  conversations   Conversation[]
   sentMessages    ChatMessage[]
 
   createdAt DateTime @default(now())
@@ -140,10 +108,11 @@ model Project {
   deletedAt DateTime?
 
   // Relations
-  members    ProjectMember[]
-  tasks      Task[]
-  documents  Document[]
-  messages   Message[]
+  members      ProjectMember[]
+  tasks        Task[]
+  documents    Document[]
+  messages     Message[]
+  conversation Conversation?
 
   createdAt DateTime @default(now())
 }
@@ -181,6 +150,18 @@ model Task {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Gantt : dates de début/fin pour la barre horizontale (drag & drop)
+  startDate DateTime?
+  endDate   DateTime?
+
+  // PERT : estimations pour te = (o + 4m + p) / 6 (en jours)
+  optimisticDays  Int?
+  probableDays    Int?
+  pessimisticDays Int?
+
+  // Burndown / vélocité : points de story (optionnel)
+  storyPoints Int?
 
   // Sous-tâches
   parentId String?
@@ -346,8 +327,9 @@ model NotificationSettings {
 // =========================================================
 
 model Conversation {
-  id        String @id @default(cuid())
-  users     User[]
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   messages  ChatMessage[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

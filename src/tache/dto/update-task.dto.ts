@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { TaskStatus } from '@prisma/client';
 
 export class UpdateTaskDto {
@@ -37,4 +44,39 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   deadline?: string;
+
+  /** Gantt : mise à jour des dates (drag & drop) */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  /** PERT : estimations en jours */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  optimisticDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  probableDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pessimisticDays?: number;
+
+  /** Burndown : points de story */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  storyPoints?: number;
 }

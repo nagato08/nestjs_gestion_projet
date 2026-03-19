@@ -27,7 +27,7 @@ export class NotificationSettingsController {
 
   // 1️⃣ Récupérer mes paramètres de notification
   @Get()
-  @ApiOperation({ title: 'Récupérer mes paramètres de notification' })
+  @ApiOperation({ summary: 'Récupérer mes paramètres de notification' })
   getMyNotificationSettings(@Req() req: any) {
     return this.notificationSettingsService.getMyNotificationSettings(
       req.user.id,
@@ -36,7 +36,7 @@ export class NotificationSettingsController {
 
   // 2️⃣ Mettre à jour mes paramètres de notification
   @Patch()
-  @ApiOperation({ title: 'Mettre à jour mes paramètres de notification' })
+  @ApiOperation({ summary: 'Mettre à jour mes paramètres de notification' })
   updateMyNotificationSettings(
     @Req() req: any,
     @Body() updateNotificationSettingsDto: UpdateNotificationSettingsDto,
@@ -52,7 +52,7 @@ export class NotificationSettingsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({
-    title:
+    summary:
       "Récupérer les paramètres de notification d'un utilisateur (Admin uniquement)",
   })
   getUserNotificationSettings(
