@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsDateString,
@@ -9,7 +6,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { ProjectStatus } from '@prisma/client';
+import { Priority, ProjectStatus } from '@prisma/client';
 
 export class CreateProjectDto {
   @ApiProperty({ example: 'Projet Alpha' })
@@ -27,10 +24,10 @@ export class CreateProjectDto {
   @IsString()
   objectives?: string;
 
-  @ApiProperty({ example: 'HIGH' })
+  @ApiProperty({ enum: Priority })
   @IsNotEmpty()
-  @IsString()
-  priority: string;
+  @IsEnum(Priority)
+  priority: Priority;
 
   @ApiProperty({ enum: ProjectStatus, default: ProjectStatus.PLANNING })
   @IsOptional()

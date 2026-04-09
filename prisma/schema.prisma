@@ -21,6 +21,13 @@ enum Role {
   EMPLOYEE
 }
 
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum Department {
   IT
   HR
@@ -50,7 +57,8 @@ model User {
   // Sécurité
   twoFactorEnabled Boolean @default(false)
   twoFactorSecret  String?
-  resetPasswordToken String? @unique
+  resetPasswordToken          String?   @unique
+  resetPasswordTokenExpiresAt DateTime?
   isResetPasswordRequested Boolean @default(false)
 
 
@@ -90,7 +98,7 @@ model Project {
   name        String
   description String? @db.Text
   objectives  String? @db.Text
-  priority    String
+  priority    Priority
   status      ProjectStatus @default(PLANNING)
 
   startDate   DateTime
@@ -144,7 +152,7 @@ model Task {
   id          String @id @default(cuid())
   title       String
   description String? @db.Text
-  priority    String
+  priority    Priority
   status      TaskStatus @default(TODO)
   deadline    DateTime?
 

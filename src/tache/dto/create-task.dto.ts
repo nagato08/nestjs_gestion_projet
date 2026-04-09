@@ -1,14 +1,16 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsArray,
   IsDateString,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
+import { Priority } from '@prisma/client';
 
 export class CreateTaskDto {
   @ApiProperty({ example: 'Implémenter la fonctionnalité de login' })
@@ -24,10 +26,10 @@ export class CreateTaskDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 'HIGH', enum: ['HIGH', 'MEDIUM', 'LOW'] })
+  @ApiProperty({ enum: Priority })
   @IsNotEmpty()
-  @IsString()
-  priority: string;
+  @IsEnum(Priority)
+  priority: Priority;
 
   @ApiProperty({ example: '2026-02-15T10:00:00Z', required: false })
   @IsOptional()

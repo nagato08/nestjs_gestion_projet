@@ -608,10 +608,11 @@ export class TacheService {
       throw new ConflictException('Cette dépendance existe déjà');
     }
 
-    // Vérifier les dépendances circulaires (simplifié)
+    // Vérifier les dépendances circulaires
     const wouldCreateCycle = await this.checkCircularDependency(
       taskId,
       dto.blockedTaskId,
+      blockingTask.projectId,
     );
     if (wouldCreateCycle) {
       throw new ConflictException(
@@ -807,37 +808,36 @@ export class TacheService {
     return tasks;
   }
 
-  // UTILITAIRE : Vérifier les dépendances circulaires (simplifié)
+  // UTILITAIRE : Vérifier les dépendances circulaires (une seule requête SQL)
   private async checkCircularDependency(
     blockingTaskId: string,
     blockedTaskId: string,
+    projectId: string,
   ): Promise<boolean> {
-    // Si blockedTask bloque blockingTask (directement ou indirectement), on a un cycle
+    // Charger toutes les dépendances du projet en une seule requête
+    const allDeps = await this.prisma.taskDependency.findMany({
+      where: { blockingTask: { projectId } },
+      select: { blockingTaskId: true, blockedTaskId: true },
+    });
+
+    // Construire le graphe d'adjacence en mémoire
+    const graph = new Map<string, string[]>();
+    for (const dep of allDeps) {
+      const neighbors = graph.get(dep.blockingTaskId) ?? [];
+      neighbors.push(dep.blockedTaskId);
+      graph.set(dep.blockingTaskId, neighbors);
+    }
+
+    // BFS en mémoire
     const visited = new Set<string>();
     const queue = [blockedTaskId];
 
     while (queue.length > 0) {
-      const currentTaskId = queue.shift()!;
-
-      if (currentTaskId === blockingTaskId) {
-        return true; // Cycle détecté
-      }
-
-      if (visited.has(currentTaskId)) {
-        continue;
-      }
-
-      visited.add(currentTaskId);
-
-      const dependencies = await this.prisma.taskDependency.findMany({
-        where: {
-          blockingTaskId: currentTaskId,
-        },
-      });
-
-      for (const dep of dependencies) {
-        queue.push(dep.blockedTaskId);
-      }
+      const current = queue.shift()!;
+      if (current === blockingTaskId) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      queue.push(...(graph.get(current) ?? []));
     }
 
     return false;

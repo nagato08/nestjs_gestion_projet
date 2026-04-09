@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsObject, IsString } from 'class-validator';
+import { Priority } from '@prisma/client';
 
 export const AI_ACTION_CREATE_TASK = 'create_task';
 export const AI_ACTION_ASSIGN_TASK = 'assign_task';
@@ -12,7 +13,7 @@ export type AiActionType =
 export interface CreateTaskParams {
   title: string;
   description?: string;
-  priority: string;
+  priority: Priority;
   assigneeId?: string;
 }
 

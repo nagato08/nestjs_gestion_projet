@@ -7,7 +7,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { TaskStatus } from '@prisma/client';
+import { Priority, TaskStatus } from '@prisma/client';
 
 export class UpdateTaskDto {
   @ApiProperty({
@@ -26,14 +26,10 @@ export class UpdateTaskDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({
-    example: 'MEDIUM',
-    enum: ['HIGH', 'MEDIUM', 'LOW'],
-    required: false,
-  })
+  @ApiProperty({ enum: Priority, required: false })
   @IsOptional()
-  @IsString()
-  priority?: string;
+  @IsEnum(Priority)
+  priority?: Priority;
 
   @ApiProperty({ enum: TaskStatus, required: false })
   @IsOptional()

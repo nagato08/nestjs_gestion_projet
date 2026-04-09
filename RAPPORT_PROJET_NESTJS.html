@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport Complet - Projet NestJS Gestion de Projets</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 60px 40px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2196F3;
+            padding-bottom: 30px;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            color: #2196F3;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .toc {
+            background: #f0f7ff;
+            padding: 20px 30px;
+            border-left: 5px solid #2196F3;
+            margin-bottom: 40px;
+            border-radius: 4px;
+        }
+        .toc h2 {
+            color: #2196F3;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        .toc ol {
+            margin-left: 20px;
+        }
+        .toc li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+        .section {
+            margin-bottom: 50px;
+            page-break-inside: avoid;
+        }
+        .section h2 {
+            color: #2196F3;
+            font-size: 2em;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+        .section h3 {
+            color: #1976D2;
+            font-size: 1.4em;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        .section h4 {
+            color: #1565C0;
+            font-size: 1.1em;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+        .subsection {
+            margin-left: 0px;
+            margin-top: 15px;
+        }
+        p {
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+        }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .code-block code {
+            background: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        .keyword { color: #ff79c6; }
+        .string { color: #f1fa8c; }
+        .function { color: #8be9fd; }
+        .comment { color: #6272a4; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+        th {
+            background: #2196F3;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        td {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 12px;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .card {
+            background: #f9f9f9;
+            border-left: 4px solid #2196F3;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .card strong {
+            color: #2196F3;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .flow-diagram {
+            background: #e3f2fd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .list-item {
+            margin-bottom: 10px;
+            margin-left: 20px;
+        }
+        .footer {
+            margin-top: 60px;
+            border-top: 2px solid #e0e0e0;
+            padding-top: 20px;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+        .badge {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin: 2px;
+        }
+        .badge.success { background: #4caf50; }
+        .badge.warning { background: #ff9800; }
+        .badge.danger { background: #f44336; }
+        @media print {
+            body { background: white; }
+            .container { box-shadow: none; padding: 0; }
+            .section { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>📋 Rapport Complet du Projet NestJS</h1>
+            <p>Gestion des Projets & Tâches avec Authentification</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Date: 2026-04-06 | Version 1.0</p>
+        </div>
+
+        <!-- TABLE OF CONTENTS -->
+        <div class="toc">
+            <h2>📑 Table des Matières</h2>
+            <ol>
+                <li>Introduction au Projet</li>
+                <li>Architecture & Stack Technologique</li>
+                <li>Installation & Configuration</li>
+                <li>Structure du Projet</li>
+                <li>Les 13 Modules Clés</li>
+                <li>Authentification & Sécurité</li>
+                <li>Flux de Données Principaux</li>
+                <li>Base de Données (Prisma)</li>
+                <li>API Endpoints & Routes</li>
+                <li>Concepts Clés NestJS</li>
+                <li>Guide de Démarrage</li>
+            </ol>
+        </div>
+
+        <!-- SECTION 1: INTRODUCTION -->
+        <div class="section">
+            <h2>1️⃣ Introduction au Projet</h2>
+            <p>
+                Ce projet est une application <strong>NestJS full-stack</strong> pour la gestion des projets et des tâches.
+                Il est conçu pour permettre aux équipes de collaborer efficacement en organisant les projets,
+                en assignant des tâches, en suivant le temps, et en communiquant en temps réel.
+            </p>
+
+            <h3>Objectifs Principaux</h3>
+            <ul class="list-item">
+                <li>✅ Gérer les projets avec des statuts et des priorités</li>
+                <li>✅ Créer et assigner des tâches avec dépendances</li>
+                <li>✅ Authentifier les utilisateurs avec JWT</li>
+                <li>✅ Suivre le temps passé sur les tâches</li>
+                <li>✅ Communiquer en temps réel avec WebSockets</li>
+                <li>✅ Gérer les documents et versions</li>
+                <li>✅ Envoyer des notifications</li>
+                <li>✅ Utiliser l'IA pour la planification</li>
+            </ul>
+
+            <h3>Public Cible</h3>
+            <p>
+                Débutants en NestJS qui souhaitent comprendre comment construire une application d'entreprise moderne
+                avec authentification, base de données relationnelle, WebSockets et architecture modulaire.
+            </p>
+        </div>
+
+        <!-- SECTION 2: ARCHITECTURE & STACK -->
+        <div class="section">
+            <h2>2️⃣ Architecture & Stack Technologique</h2>
+
+            <h3>Backend - NestJS</h3>
+            <p>
+                NestJS est un framework <strong>modulaire et extensible</strong> construit sur Express.js.
+                Il utilise TypeScript et suit une architecture inspirée d'Angular.
+            </p>
+            <div class="card">
+                <strong>Framework Principal:</strong> NestJS v11.0.1
+                <br><strong>Runtime:</strong> Node.js
+                <br><strong>Langage:</strong> TypeScript
+                <br><strong>Port Default:</strong> 4000
+            </div>
+
+            <h3>Base de Données</h3>
+            <table>
+                <tr>
+                    <th>Technologie</th>
+                    <th>Version</th>
+                    <th>Rôle</th>
+                </tr>
+                <tr>
+                    <td><code>PostgreSQL</code></td>
+                    <td>Latest</td>
+                    <td>Base de données relationnelle principale</td>
+                </tr>
+                <tr>
+                    <td><code>Prisma ORM</code></td>
+                    <td>^7.2.0</td>
+                    <td>ORM moderne pour requêtes type-safe</td>
+                </tr>
+                <tr>
+                    <td><code>SQLite (optionnel)</code></td>
+                    <td>^7.2.0</td>
+                    <td>Alternative légère pour dev</td>
+                </tr>
+            </table>
+
+            <h3>Dépendances Principales</h3>
+            <table>
+                <tr>
+                    <th>Paquet</th>
+                    <th>Fonction</th>
+                </tr>
+                <tr>
+                    <td><code>@nestjs/jwt</code></td>
+                    <td>Authentification par tokens JWT</td>
+                </tr>
+                <tr>
+                    <td><code>@nestjs/passport</code></td>
+                    <td>Stratégies d'authentification</td>
+                </tr>
+                <tr>
+                    <td><code>@nestjs/websockets</code></td>
+                    <td>Communication temps réel avec Socket.io</td>
+                </tr>
+                <tr>
+                    <td><code>@nestjs/swagger</code></td>
+                    <td>Documentation API interactive</td>
+                </tr>
+                <tr>
+                    <td><code>bcrypt</code></td>
+                    <td>Hachage sécurisé des mots de passe</td>
+                </tr>
+                <tr>
+                    <td><code>class-validator</code></td>
+                    <td>Validation des DTOs</td>
+                </tr>
+                <tr>
+                    <td><code>openai</code></td>
+                    <td>Intégration avec l'API OpenAI</td>
+                </tr>
+                <tr>
+                    <td><code>cloudinary</code></td>
+                    <td>Gestion des images en cloud</td>
+                </tr>
+                <tr>
+                    <td><code>stripe</code></td>
+                    <td>Paiements (optionnel)</td>
+                </tr>
+                <tr>
+                    <td><code>resend</code></td>
+                    <td>Envoi d'emails</td>
+                </tr>
+            </table>
+
+            <h3>Architecture en Couches</h3>
+            <div class="flow-diagram">Controllers (Routes HTTP)
+    ↓
+Services (Logique métier)
+    ↓
+Prisma Service (Accès DB)
+    ↓
+PostgreSQL Database
+            </div>
+        </div>
+
+        <!-- SECTION 3: INSTALLATION -->
+        <div class="section">
+            <h2>3️⃣ Installation & Configuration</h2>
+
+            <h3>Prérequis</h3>
+            <ul class="list-item">
+                <li>Node.js v18+ installé</li>
+                <li>npm ou yarn comme gestionnaire de paquets</li>
+                <li>PostgreSQL running (ou SQLite pour le dev)</li>
+                <li>Un compte OpenAI (optionnel)</li>
+                <li>Un compte Cloudinary (optionnel)</li>
+            </ul>
+
+            <h3>Étapes d'Installation</h3>
+            <div class="code-block">
+<span class="comment"># 1. Cloner le projet</span>
+git clone &lt;repo-url&gt;
+cd tuto
+
+<span class="comment"># 2. Installer les dépendances</span>
+npm install
+
+<span class="comment"># 3. Configurer les variables d'environnement</span>
+cp .env.example .env
+
+<span class="comment"># 4. Initialiser la base de données</span>
+npx prisma migrate dev --name init
+npx prisma generate
+
+<span class="comment"># 5. Lancer l'application en développement</span>
+npm run start:dev
+
+<span class="comment"># 6. Accéder à l'API</span>
+http://localhost:4000
+http://localhost:4000/swagger <span class="comment"># Documentation Swagger</span>
+            </div>
+
+            <h3>Variables d'Environnement (.env)</h3>
+            <div class="code-block">
+DATABASE_URL=postgresql://user:password@localhost:5432/tuto
+JWT_SECRET=your-super-secret-key-here
+CORS_ORIGIN=http://localhost:3000
+PORT=4000
+
+<span class="comment"># Optionnel - OpenAI</span>
+OPENAI_API_KEY=sk-...
+
+<span class="comment"># Optionnel - Cloudinary</span>
+CLOUDINARY_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+
+<span class="comment"># Optionnel - Email</span>
+RESEND_API_KEY=re_...
+            </div>
+        </div>
+
+        <!-- SECTION 4: STRUCTURE -->
+        <div class="section">
+            <h2>4️⃣ Structure du Projet</h2>
+
+            <h3>Arborescence Générale</h3>
+            <div class="code-block">
+tuto/
+├── src/
+│   ├── main.ts                 <span class="comment"># Point d'entrée</span>
+│   ├── app.module.ts           <span class="comment"># Module racine</span>
+│   ├── app.controller.ts       <span class="comment"># Contrôleur racine</span>
+│   ├── app.service.ts          <span class="comment"># Service racine</span>
+│   ├── app.gateway.ts          <span class="comment"># WebSocket gateway</span>
+│   ├── prisma.service.ts       <span class="comment"># Service ORM</span>
+│   ├── mailer.service.ts       <span class="comment"># Service email</span>
+│   │
+│   ├── auth/                   <span class="comment"># 🔐 Authentification</span>
+│   ├── project/                <span class="comment"># 📁 Gestion des projets</span>
+│   ├── tache/                  <span class="comment"># ✅ Gestion des tâches</span>
+│   ├── document/               <span class="comment"># 📄 Gestion des documents</span>
+│   ├── chat/                   <span class="comment"># 💬 Chat temps réel</span>
+│   ├── message/                <span class="comment"># 📮 Messages</span>
+│   ├── notification/           <span class="comment"># 🔔 Notifications</span>
+│   ├── time-entry/             <span class="comment"># ⏱️ Suivi du temps</span>
+│   ├── planning/               <span class="comment"># 📅 Planification</span>
+│   ├── ai/                     <span class="comment"># 🤖 IA</span>
+│   ├── socket/                 <span class="comment"># 🔌 WebSockets</span>
+│   ├── company-settings/       <span class="comment"># ⚙️ Paramètres</span>
+│   └── common/                 <span class="comment"># 🛠️ Utilitaires</span>
+│
+├── prisma/
+│   ├── schema.prisma           <span class="comment"># Schéma BD</span>
+│   └── migrations/             <span class="comment"># Historique BD</span>
+│
+├── package.json
+├── tsconfig.json
+└── .env
+            </div>
+
+            <h3>Pattern de Chaque Module</h3>
+            <p>Chaque module suit le même pattern NestJS:</p>
+            <div class="code-block">
+monmodule/
+├── monmodule.module.ts         <span class="comment"># Déclaration du module</span>
+├── monmodule.controller.ts     <span class="comment"># Routes HTTP</span>
+├── monmodule.service.ts        <span class="comment"># Logique métier</span>
+├── dto/
+│   ├── create-monmodule.dto.ts
+│   ├── update-monmodule.dto.ts
+│   └── ...
+└── (optionnel)
+    ├── monmodule.gateway.ts    <span class="comment"># WebSockets</span>
+    └── guards/                 <span class="comment"># Protections</span>
+            </div>
+        </div>
+
+        <!-- SECTION 5: 13 MODULES -->
+        <div class="section">
+            <h2>5️⃣ Les 13 Modules Clés</h2>
+
+            <h3>📋 Synthèse des Modules</h3>
+            <table>
+                <tr>
+                    <th>Module</th>
+                    <th>Responsabilité</th>
+                    <th>Fichiers Clés</th>
+                </tr>
+                <tr>
+                    <td><code>AuthModule</code></td>
+                    <td>Authentification JWT, inscription, connexion</td>
+                    <td>auth.controller.ts, auth.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>ProjectModule</code></td>
+                    <td>Gestion des projets et membres</td>
+                    <td>project.controller.ts, project.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>TacheModule</code></td>
+                    <td>Gestion des tâches et dépendances</td>
+                    <td>tache.controller.ts, tache.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>DocumentModule</code></td>
+                    <td>Gestion des fichiers et versions</td>
+                    <td>document.controller.ts, document.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>ChatModule</code></td>
+                    <td>Chat en temps réel par projet</td>
+                    <td>chat.controller.ts, chat.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>MessageModule</code></td>
+                    <td>Messages statiques</td>
+                    <td>message.controller.ts, message.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>NotificationModule</code></td>
+                    <td>Notifications utilisateurs</td>
+                    <td>notification.controller.ts, notification.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>TimeEntryModule</code></td>
+                    <td>Suivi du temps sur les tâches</td>
+                    <td>time-entry.controller.ts, time-entry.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>PlanningModule</code></td>
+                    <td>Planification et calendrier</td>
+                    <td>planning.controller.ts, planning.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>AiModule</code></td>
+                    <td>Intégration OpenAI pour la planification</td>
+                    <td>ai.controller.ts, ai.service.ts</td>
+                </tr>
+                <tr>
+                    <td><code>SocketModule</code></td>
+                    <td>WebSockets avec Socket.io</td>
+                    <td>socket.gateway.ts</td>
+                </tr>
+                <tr>
+                    <td><code>CompanySettingsModule</code></td>
+                    <td>Paramètres globaux de l'entreprise</td>
+                    <td>company-settings.controller.ts</td>
+                </tr>
+                <tr>
+                    <td><code>NotificationSettingsModule</code></td>
+                    <td>Préférences de notification par utilisateur</td>
+                    <td>notification-settings.controller.ts</td>
+                </tr>
+            </table>
+
+            <h3>🔐 AuthModule - Authentification</h3>
+            <p><strong>Responsabilité:</strong> Gérer l'inscription, la connexion et la sécurité des utilisateurs.</p>
+
+            <h4>Fichiers Clés:</h4>
+            <ul class="list-item">
+                <li><code>auth.controller.ts</code> - Routes POST /register, POST /login, GET /profile, GET /users, DELETE /:id</li>
+                <li><code>auth.service.ts</code> - Logique de validation, hachage JWT avec bcrypt</li>
+                <li><code>jwt.strategy.ts</code> - Stratégie de validation JWT</li>
+                <li><code>guards/jwt-auth.guard.ts</code> - Protège les routes avec @UseGuards(JwtAuthGuard)</li>
+                <li><code>guards/roles.guard.ts</code> - Contrôle d'accès par rôle avec @Roles(Role.ADMIN)</li>
+                <li><code>auth.module.ts</code> - Enregistre JwtModule et PassportModule</li>
+            </ul>
+
+            <h4>Processus de Connexion:</h4>
+            <div class="flow-diagram">
+Utilisateur envoie email + password
+    ↓
+AuthService.login() valide les credentials
+    ↓
+Hachage du password comparé avec bcrypt.compare()
+    ↓
+JWT généré avec jwtService.signAsync(payload)
+    ↓
+Retour au client: {user, access_token, dashboardUrl}
+            </div>
+
+            <h3>📁 ProjectModule - Gestion des Projets</h3>
+            <p><strong>Responsabilité:</strong> CRUD sur les projets, gestion des membres, codes d'accès.</p>
+
+            <h4>Entités Principales:</h4>
+            <ul class="list-item">
+                <li><strong>Project</strong> - name, description, status (PLANNING|ACTIVE|COMPLETED), owner</li>
+                <li><strong>ProjectMember</strong> - Lien M:N entre User et Project</li>
+            </ul>
+
+            <h4>Routes:</h4>
+            <div class="code-block">
+POST /project                 <span class="comment"># Créer un projet</span>
+GET /project                  <span class="comment"># Mes projets</span>
+GET /project/:id              <span class="comment"># Détails du projet</span>
+PUT /project/:id              <span class="comment"># Modifier le projet</span>
+DELETE /project/:id           <span class="comment"># Supprimer le projet</span>
+POST /project/add-member      <span class="comment"># Ajouter un membre</span>
+POST /project/remove-member   <span class="comment"># Retirer un membre</span>
+            </div>
+
+            <h3>✅ TacheModule - Gestion des Tâches</h3>
+            <p><strong>Responsabilité:</strong> CRUD tâches, assignation, dépendances, commentaires.</p>
+
+            <h4>Entités Principales:</h4>
+            <ul class="list-item">
+                <li><strong>Task</strong> - title, status (TODO|DOING|DONE), priority, deadline, storyPoints</li>
+                <li><strong>TaskDependency</strong> - Relation: Task A bloque Task B</li>
+                <li><strong>TaskAssignment</strong> - Qui est assigné à quelle tâche</li>
+                <li><strong>Comment</strong> - Commentaires sur les tâches</li>
+            </ul>
+
+            <h4>Routes:</h4>
+            <div class="code-block">
+POST /tache                          <span class="comment"># Créer une tâche</span>
+GET /tache/project/:projectId        <span class="comment"># Tâches du projet</span>
+GET /tache/:id                       <span class="comment"># Détails</span>
+PUT /tache/:id                       <span class="comment"># Modifier</span>
+PATCH /tache/:id/status              <span class="comment"># Changer le statut</span>
+POST /tache/:id/assign               <span class="comment"># Assigner un utilisateur</span>
+POST /tache/:id/comment              <span class="comment"># Ajouter un commentaire</span>
+POST /tache/create-dependency        <span class="comment"># Créer une dépendance</span>
+            </div>
+
+            <h3>📄 DocumentModule - Gestion des Documents</h3>
+            <p><strong>Responsabilité:</strong> Upload de fichiers, versioning, commentaires sur documents.</p>
+
+            <h4>Entités:</h4>
+            <ul class="list-item">
+                <li><strong>Document</strong> - Fichier avec versions</li>
+                <li><strong>DocumentVersion</strong> - Historique des versions</li>
+                <li><strong>DocumentComment</strong> - Commentaires spécifiques</li>
+            </ul>
+
+            <h3>💬 ChatModule - Communication Temps Réel</h3>
+            <p><strong>Responsabilité:</strong> Chat en temps réel par projet avec WebSockets.</p>
+
+            <h4>Entités:</h4>
+            <ul class="list-item">
+                <li><strong>Conversation</strong> - Chat par projet (1:1 avec Project)</li>
+                <li><strong>ChatMessage</strong> - Messages dans une conversation</li>
+            </ul>
+
+            <h3>🔔 NotificationModule - Notifications</h3>
+            <p><strong>Responsabilité:</strong> Créer et gérer les notifications utilisateurs.</p>
+
+            <h4>Types de Notifications:</h4>
+            <ul class="list-item">
+                <li>Ajout à un projet</li>
+                <li>Assignation de tâche</li>
+                <li>Changement de statut</li>
+                <li>Mention dans un commentaire</li>
+            </ul>
+
+            <h3>⏱️ TimeEntryModule - Suivi du Temps</h3>
+            <p><strong>Responsabilité:</strong> Enregistrer le temps passé sur les tâches.</p>
+
+            <h4>Entités:</h4>
+            <ul class="list-item">
+                <li><strong>TimeEntry</strong> - Début/fin de travail sur une tâche avec durée</li>
+            </ul>
+
+            <h3>🤖 AiModule - Intelligence Artificielle</h3>
+            <p><strong>Responsabilité:</strong> Intégration OpenAI pour planification intelligente.</p>
+
+            <h4>Fonctionnalités:</h4>
+            <ul class="list-item">
+                <li>Estimation automatique de tâches</li>
+                <li>Suggestion de priorités</li>
+                <li>Optimisation de calendrier</li>
+            </ul>
+
+            <h3>🔌 SocketModule - WebSockets</h3>
+            <p><strong>Responsabilité:</strong> Communication bidirectionnelle en temps réel.</p>
+
+            <h4>Events Socket.io:</h4>
+            <ul class="list-item">
+                <li><code>join_project</code> - Rejoindre un projet</li>
+                <li><code>send_message</code> - Envoyer un message</li>
+                <li><code>task_updated</code> - Notification mise à jour</li>
+                <li><code>disconnect</code> - Déconnexion</li>
+            </ul>
+        </div>
+
+        <!-- SECTION 6: AUTH & SECURITE -->
+        <div class="section">
+            <h2>6️⃣ Authentification & Sécurité</h2>
+
+            <h3>Flux d'Authentification JWT</h3>
+            <div class="flow-diagram">
+┌─────────────────────────────────────┐
+│ 1. Client envoie credentials        │
+│    POST /auth/login                 │
+│    { email, password }              │
+└─────────────────────────────────────┘
+           ↓
+┌─────────────────────────────────────┐
+│ 2. AuthService.login() vérifie      │
+│    - Email existe?                  │
+│    - Password valide? (bcrypt)      │
+└─────────────────────────────────────┘
+           ↓
+┌─────────────────────────────────────┐
+│ 3. JWT généré avec payload:         │
+│    { sub, email, role, department } │
+│    Signé avec JWT_SECRET            │
+│    Expire dans 30 jours             │
+└─────────────────────────────────────┘
+           ↓
+┌─────────────────────────────────────┐
+│ 4. Client reçoit access_token       │
+│    Stocke dans localStorage         │
+└─────────────────────────────────────┘
+           ↓
+┌─────────────────────────────────────┐
+│ 5. Requêtes futures                 │
+│    Authorization: Bearer &lt;token&gt;   │
+│    JwtAuthGuard valide le token     │
+└─────────────────────────────────────┘
+            </div>
+
+            <h3>Rôles & Contrôle d'Accès</h3>
+            <table>
+                <tr>
+                    <th>Rôle</th>
+                    <th>Permissions</th>
+                </tr>
+                <tr>
+                    <td><code>ADMIN</code></td>
+                    <td>✅ Voir tous les utilisateurs<br>✅ Supprimer les utilisateurs<br>✅ Accès complet</td>
+                </tr>
+                <tr>
+                    <td><code>PROJECT_MANAGER</code></td>
+                    <td>✅ Créer/modifier les projets<br>✅ Assigner les tâches<br>✅ Voir les rapports</td>
+                </tr>
+                <tr>
+                    <td><code>EMPLOYEE</code></td>
+                    <td>✅ Voir ses projets<br>✅ Accepter les tâches<br>✅ Voir ses tâches</td>
+                </tr>
+            </table>
+
+            <h3>Protections Appliquées</h3>
+            <div class="card">
+                <strong>🔐 JwtAuthGuard</strong> - Valide la présence du JWT dans les headers
+                <br><strong>🛡️ RolesGuard</strong> - Vérifie que le rôle fait partie de @Roles()
+                <br><strong>🔑 bcrypt</strong> - Hachage 10 rounds pour les passwords (jamais stocké en clair)
+                <br><strong>⏰ Token Expiry</strong> - 30 jours pour éviter les vols à long terme
+                <br><strong>🚫 Soft Delete</strong> - Users/Projects marqués deletedAt au lieu d'être supprimés
+                <br><strong>🌐 CORS</strong> - Contrôle des origines autorisées
+                <br><strong>⛔ Throttle</strong> - Limite 10 requêtes par minute par IP
+            </div>
+
+            <h3>Données Sensibles</h3>
+            <p>Les données suivantes ne sont JAMAIS renvoyées au client:</p>
+            <ul class="list-item">
+                <li>Password (haché en base)</li>
+                <li>resetPasswordToken</li>
+                <li>twoFactorSecret</li>
+            </ul>
+        </div>
+
+        <!-- SECTION 7: FLUX DE DONNEES -->
+        <div class="section">
+            <h2>7️⃣ Flux de Données Principaux</h2>
+
+            <h3>Flux 1: Création d'un Projet</h3>
+            <div class="flow-diagram">
+Frontend appelle:
+POST /project
+{ name, description, startDate, ... }
+Authorization: Bearer &lt;JWT&gt;
+
+         ↓
+ProjectController.createProject()
+
+         ↓
+ProjectService.createProject(userId, dto)
+- Valide l'DTO avec les pipes
+- Génère un projectCode unique
+- Utilise une TRANSACTION Prisma:
+  • Crée le Project
+  • Ajoute owner comme ProjectMember
+  • Crée une Conversation pour le chat
+         ↓
+Retour au client:
+{ id, name, projectCode, owner, createdAt }
+            </div>
+
+            <h3>Flux 2: Créer & Assigner une Tâche</h3>
+            <div class="flow-diagram">
+POST /tache
+{
+  title,
+  projectId,
+  assignedUserIds: [userId1, userId2],
+  priority,
+  deadline
+}
+
+         ↓
+TacheService.createTask()
+- Vérifie que l'utilisateur est membre du projet
+- Valide que les assignés sont aussi membres
+- Crée la Task avec statut TODO
+
+         ↓
+Pour chaque assigné:
+- Crée une TaskAssignment (M:N)
+- Notifie l'utilisateur
+
+         ↓
+Retour: { id, title, assignments: [...] }
+            </div>
+
+            <h3>Flux 3: Mettre à Jour le Statut d'une Tâche</h3>
+            <div class="flow-diagram">
+PATCH /tache/:taskId/status
+{ status: "DOING" }
+
+         ↓
+Vérifie les dépendances:
+- S'il y a des tâches qui la bloquent
+  → Erreur "Task is blocked by..."
+- Sinon, change le statut
+
+         ↓
+Notifie tous les assignés
+
+         ↓
+WebSocket broadcast:
+emit('task_updated', { taskId, newStatus })
+Tous les clients reçoivent la MAJ
+            </div>
+
+            <h3>Flux 4: Communication Temps Réel (Chat)</h3>
+            <div class="flow-diagram">
+Client A se connecte au WebSocket:
+socket.io connection → verifyJWT()
+
+         ↓
+Client A rejoint une room:
+socket.emit('join_project', projectId)
+
+         ↓
+Client A envoie un message:
+socket.emit('send_message', {
+  content: "Besoin d'aide"
+})
+
+         ↓
+ChatService.createMessage() sauvegarde en DB
+
+         ↓
+ChatMessage est broadcasté:
+io.to(projectRoom).emit('message_received', msg)
+
+Tous les clients dans la room reçoivent le message
+            </div>
+        </div>
+
+        <!-- SECTION 8: BASE DE DONNEES -->
+        <div class="section">
+            <h2>8️⃣ Base de Données (Prisma & PostgreSQL)</h2>
+
+            <h3>Qu'est-ce que Prisma?</h3>
+            <p>
+                Prisma est un <strong>ORM (Object-Relational Mapping)</strong> qui transforme les tables SQL
+                en objets TypeScript type-safe. Au lieu d'écrire du SQL brut, vous utilisez une API JavaScript élégante.
+            </p>
+
+            <h3>Schéma Prisma (prisma/schema.prisma)</h3>
+            <p>Définit les modèles de données et leurs relations:</p>
+            <div class="code-block">
+<span class="keyword">model</span> User {
+  id        String @id @default(cuid())
+  email     String @unique
+  password  String
+  firstName String @map("first_name")
+  lastName  String @map("last_name")
+  role      Role   @default(EMPLOYEE)
+
+  <span class="comment">// Relations</span>
+  projectsOwned   Project[]        @relation("ProjectOwner")
+  projectMembers  ProjectMember[]
+  taskAssignments TaskAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+<span class="keyword">model</span> Project {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members     ProjectMember[]
+  tasks       Task[]
+  deletedAt   DateTime?  <span class="comment">// Soft delete</span>
+}
+
+<span class="keyword">model</span> Task {
+  id          String @id @default(cuid())
+  title       String
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id])
+  assignments TaskAssignment[]
+
+  <span class="comment">// Dépendances</span>
+  dependencies TaskDependency[] @relation("BlockingTask")
+  blockedBy    TaskDependency[] @relation("BlockedTask")
+}
+
+<span class="keyword">enum</span> Role {
+  ADMIN
+  PROJECT_MANAGER
+  EMPLOYEE
+}
+
+<span class="keyword">enum</span> TaskStatus {
+  TODO
+  DOING
+  DONE
+}
+
+<span class="keyword">enum</span> Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+            </div>
+
+            <h3>Opérations Prisma Courantes</h3>
+            <table>
+                <tr>
+                    <th>Opération</th>
+                    <th>Exemple</th>
+                </tr>
+                <tr>
+                    <td><strong>CREATE</strong></td>
+                    <td><code>prisma.user.create({ data: {...} })</code></td>
+                </tr>
+                <tr>
+                    <td><strong>READ</strong></td>
+                    <td><code>prisma.user.findUnique({ where: {id} })</code></td>
+                </tr>
+                <tr>
+                    <td><strong>UPDATE</strong></td>
+                    <td><code>prisma.user.update({ where, data })</code></td>
+                </tr>
+                <tr>
+                    <td><strong>DELETE</strong></td>
+                    <td><code>prisma.user.delete({ where })</code></td>
+                </tr>
+                <tr>
+                    <td><strong>FIND MANY</strong></td>
+                    <td><code>prisma.task.findMany({ where, include, orderBy })</code></td>
+                </tr>
+                <tr>
+                    <td><strong>TRANSACTION</strong></td>
+                    <td><code>prisma.$transaction(async tx => {...})</code></td>
+                </tr>
+            </table>
+
+            <h3>Migrations - Évolution du Schéma</h3>
+            <p>Chaque changement du schéma génère une migration SQL:</p>
+            <div class="code-block">
+<span class="comment"># Créer une migration</span>
+npx prisma migrate dev --name add_priority_enum
+
+<span class="comment"># Applique les migrations</span>
+npx prisma migrate deploy
+
+<span class="comment"># Voir l'historique</span>
+npx prisma migrate status
+
+<span class="comment"># Générer Prisma Client (required après changement)</span>
+npx prisma generate
+            </div>
+
+            <h3>Relation Types</h3>
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Exemple</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>1:N</td>
+                    <td>1 Project → N Tasks</td>
+                    <td>Un projet a plusieurs tâches</td>
+                </tr>
+                <tr>
+                    <td>M:N</td>
+                    <td>N Users ↔ N Projects (ProjectMember)</td>
+                    <td>Relation avec table de jonction</td>
+                </tr>
+                <tr>
+                    <td>Softdelete</td>
+                    <td>deletedAt DateTime?</td>
+                    <td>Marqué supprimé, pas physiquement supprimé</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- SECTION 9: API ENDPOINTS -->
+        <div class="section">
+            <h2>9️⃣ API Endpoints & Routes</h2>
+
+            <h3>📌 Routes d'Authentification</h3>
+            <table>
+                <tr>
+                    <th>Méthode</th>
+                    <th>Route</th>
+                    <th>Authentification</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/auth/register</td>
+                    <td>❌ Non</td>
+                    <td>Inscrire un nouvel utilisateur</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/auth/login</td>
+                    <td>❌ Non</td>
+                    <td>Connexion (retourne JWT)</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/auth/profile</td>
+                    <td>✅ JWT</td>
+                    <td>Profil de l'utilisateur connecté</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/auth/users</td>
+                    <td>✅ Admin</td>
+                    <td>Lister tous les utilisateurs</td>
+                </tr>
+                <tr>
+                    <td>DELETE</td>
+                    <td>/auth/:id</td>
+                    <td>✅ Admin</td>
+                    <td>Supprimer un utilisateur</td>
+                </tr>
+            </table>
+
+            <h3>📁 Routes Projets</h3>
+            <table>
+                <tr>
+                    <th>Méthode</th>
+                    <th>Route</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/project</td>
+                    <td>Créer un projet</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/project</td>
+                    <td>Mes projets (members)</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/project/:id</td>
+                    <td>Détails du projet</td>
+                </tr>
+                <tr>
+                    <td>PUT</td>
+                    <td>/project/:id</td>
+                    <td>Modifier le projet</td>
+                </tr>
+                <tr>
+                    <td>DELETE</td>
+                    <td>/project/:id</td>
+                    <td>Supprimer le projet (soft delete)</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/project/add-member</td>
+                    <td>Ajouter un membre</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/project/remove-member</td>
+                    <td>Retirer un membre</td>
+                </tr>
+            </table>
+
+            <h3>✅ Routes Tâches</h3>
+            <table>
+                <tr>
+                    <th>Méthode</th>
+                    <th>Route</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/tache</td>
+                    <td>Créer une tâche</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/tache/project/:projectId</td>
+                    <td>Tâches du projet</td>
+                </tr>
+                <tr>
+                    <td>GET</td>
+                    <td>/tache/:id</td>
+                    <td>Détails de la tâche</td>
+                </tr>
+                <tr>
+                    <td>PUT</td>
+                    <td>/tache/:id</td>
+                    <td>Modifier la tâche</td>
+                </tr>
+                <tr>
+                    <td>PATCH</td>
+                    <td>/tache/:id/status</td>
+                    <td>Changer le statut</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/tache/:id/assign</td>
+                    <td>Assigner un utilisateur</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/tache/:id/comment</td>
+                    <td>Ajouter un commentaire</td>
+                </tr>
+                <tr>
+                    <td>POST</td>
+                    <td>/tache/create-dependency</td>
+                    <td>Créer une dépendance Task A → Task B</td>
+                </tr>
+            </table>
+
+            <h3>📊 Documentation Interactive</h3>
+            <p>
+                Vous pouvez tester TOUS les endpoints avec Swagger UI:
+                <br><strong>http://localhost:4000/swagger</strong>
+            </p>
+            <p>Swagger génère automatiquement la documentation à partir des décorateurs @ApiOperation, @ApiParam, etc.</p>
+        </div>
+
+        <!-- SECTION 10: CONCEPTS NESTJS -->
+        <div class="section">
+            <h2>🔟 Concepts Clés NestJS</h2>
+
+            <h3>1. Modules (@Module)</h3>
+            <p>
+                Les modules sont des conteneurs qui regroupent contrôleurs et services liés.
+                Chaque module peut importer d'autres modules et exporter ses providers.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Module</span>({
+  imports: [
+    JwtModule.register({...}),
+    PassportModule
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy, PrismaService],
+})
+<span class="keyword">export class</span> AuthModule {}
+            </div>
+
+            <h3>2. Contrôleurs (@Controller)</h3>
+            <p>
+                Les contrôleurs reçoivent les requêtes HTTP et appellent les services.
+                Ils utilisent des décorateurs pour définir les routes.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Controller</span>('auth')
+<span class="keyword">export class</span> AuthController {
+  constructor(<span class="keyword">private</span> authService: AuthService) {}
+
+  <span class="keyword">@Post</span>('login')
+  <span class="keyword">@ApiOperation</span>({ summary: 'Connexion' })
+  <span class="keyword">async</span> login(@Body() loginDto: LoginDTO) {
+    <span class="keyword">return this</span>.authService.login(loginDto);
+  }
+}
+            </div>
+
+            <h3>3. Services (@Injectable)</h3>
+            <p>
+                Les services contiennent la logique métier.
+                Ils sont injectables dans les contrôleurs et autres services.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Injectable</span>()
+<span class="keyword">export class</span> AuthService {
+  constructor(
+    <span class="keyword">private</span> prisma: PrismaService,
+    <span class="keyword">private</span> jwtService: JwtService
+  ) {}
+
+  <span class="keyword">async</span> login(dto: LoginDTO) {
+    <span class="comment">// Logique métier ici</span>
+  }
+}
+            </div>
+
+            <h3>4. DTOs (Data Transfer Objects)</h3>
+            <p>
+                Les DTOs valident et typent les données entrantes.
+                Utilisent class-validator et class-transformer.
+            </p>
+            <div class="code-block">
+<span class="keyword">export class</span> CreateUserDto {
+  <span class="keyword">@IsEmail</span>()
+  email: string;
+
+  <span class="keyword">@MinLength</span>(8)
+  password: string;
+
+  <span class="keyword">@IsIn</span>([Role.ADMIN, Role.EMPLOYEE])
+  role: Role;
+}
+            </div>
+
+            <h3>5. Guards (@UseGuards)</h3>
+            <p>
+                Les gardes contrôlent l'accès aux routes avant que le contrôleur ne s'exécute.
+            </p>
+            <div class="code-block">
+<span class="keyword">@UseGuards</span>(JwtAuthGuard, RolesGuard)
+<span class="keyword">@Roles</span>(Role.ADMIN)
+<span class="keyword">@Get</span>('users')
+<span class="keyword">async</span> getUsers() {
+  <span class="comment">// Seulement les ADMIN peuvent accéder</span>
+}
+            </div>
+
+            <h3>6. Pipes (@UsePipes)</h3>
+            <p>
+                Les pipes transforment et valident les données avant qu'elles n'atteignent le contrôleur.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Post</span>()
+<span class="keyword">@UsePipes</span>(<span class="keyword">new</span> ValidationPipe({ whitelist: true }))
+<span class="keyword">async</span> create(@Body() dto: CreateProjectDto) {
+  <span class="comment">// Les données sont validées et transformées</span>
+}
+            </div>
+
+            <h3>7. Decorateurs Personnalisés</h3>
+            <p>
+                Créez des décorateurs réutilisables pour extraire des données spécifiques.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Decorator</span>()
+<span class="keyword">export const</span> CurrentUser = createParamDecorator(
+  (data, ctx) => {
+    <span class="keyword">const</span> req = ctx.switchToHttp().getRequest();
+    <span class="keyword">return</span> req.user;
+  }
+);
+
+<span class="comment">// Utilisation dans le contrôleur:</span>
+<span class="keyword">@Get</span>('profile')
+getProfile(@CurrentUser() user) {
+  <span class="comment">// user contient les infos JWT</span>
+}
+            </div>
+
+            <h3>8. Gateways WebSocket</h3>
+            <p>
+                Les gateways gèrent la communication temps réel avec Socket.io.
+            </p>
+            <div class="code-block">
+<span class="keyword">@WebSocketGateway</span>({
+  cors: { origin: '*' }
+})
+<span class="keyword">export class</span> AppGateway <span class="keyword">implements</span> OnGatewayConnection {
+  <span class="keyword">@SubscribeMessage</span>('join_project')
+  <span class="keyword">async</span> joinProject(client: Socket, projectId: string) {
+    client.join(`project-${projectId}`);
+  }
+
+  <span class="keyword">@SubscribeMessage</span>('send_message')
+  <span class="keyword">async</span> sendMessage(client: Socket, message: any) {
+    <span class="keyword">this</span>.server.emit('message_received', message);
+  }
+}
+            </div>
+
+            <h3>9. Exception Filters</h3>
+            <p>
+                Les filtres centralisent la gestion des erreurs.
+            </p>
+            <div class="code-block">
+<span class="keyword">@Catch</span>()
+<span class="keyword">export class</span> AllExceptionsFilter <span class="keyword">implements</span> ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    <span class="comment">// Traiter l'exception globalement</span>
+  }
+}
+            </div>
+
+            <h3>10. Injection de Dépendances</h3>
+            <p>
+                NestJS gère automatiquement les dépendances. Déclarez simplement dans le constructeur.
+            </p>
+            <div class="code-block">
+<span class="keyword">export class</span> ProjectService {
+  constructor(
+    <span class="keyword">private</span> prisma: PrismaService,
+    <span class="keyword">private</span> notificationService: NotificationService,
+    <span class="keyword">private</span> logger: Logger
+  ) {}
+}
+            </div>
+        </div>
+
+        <!-- SECTION 11: GUIDE DEMARRAGE -->
+        <div class="section">
+            <h2>1️⃣1️⃣ Guide de Démarrage</h2>
+
+            <h3>Phase 1: Configuration (10 min)</h3>
+            <div class="code-block">
+<span class="comment"># 1. Cloner et entrer</span>
+git clone &lt;repo-url&gt;
+cd tuto
+
+<span class="comment"># 2. Installer les dépendances</span>
+npm install
+
+<span class="comment"># 3. Créer le fichier .env</span>
+cp .env.example .env
+<span class="comment"># Éditer .env avec vos paramètres</span>
+
+<span class="comment"># 4. Initialiser la BD</span>
+npx prisma migrate dev --name init
+npx prisma generate
+            </div>
+
+            <h3>Phase 2: Lancement (5 min)</h3>
+            <div class="code-block">
+<span class="comment"># Mode développement (avec reload auto)</span>
+npm run start:dev
+
+<span class="comment"># Ouvrir le navigateur</span>
+http://localhost:4000           <span class="comment"># API</span>
+http://localhost:4000/swagger   <span class="comment"># Docs</span>
+            </div>
+
+            <h3>Phase 3: Test des Endpoints (15 min)</h3>
+            <div class="highlight">
+                <strong>Étape 1: Créer un utilisateur</strong><br>
+                POST /auth/register<br>
+                { email: "test@example.com", password: "password123", firstName: "John", lastName: "Doe", role: "EMPLOYEE", department: "IT" }
+            </div>
+
+            <div class="highlight">
+                <strong>Étape 2: Se connecter</strong><br>
+                POST /auth/login<br>
+                { email: "test@example.com", password: "password123" }<br>
+                → Copier le access_token
+            </div>
+
+            <div class="highlight">
+                <strong>Étape 3: Ajouter le token dans Swagger</strong><br>
+                Cliquer sur le bouton "Authorize" en haut<br>
+                Paster: Bearer &lt;votre_token&gt;
+            </div>
+
+            <div class="highlight">
+                <strong>Étape 4: Créer un projet</strong><br>
+                POST /project<br>
+                { name: "Mon Projet", description: "...", startDate: "2026-04-06", priority: "HIGH" }
+            </div>
+
+            <div class="highlight">
+                <strong>Étape 5: Créer une tâche</strong><br>
+                POST /tache<br>
+                { title: "Faire le landing page", projectId: "&lt;project_id&gt;", priority: "HIGH", assignedUserIds: [...] }
+            </div>
+
+            <h3>Phase 4: Explorer le Code</h3>
+            <p>Maintenant que ça marche, explorez le code dans cet ordre:</p>
+            <ol>
+                <li>Lisez <code>src/app.module.ts</code> - Structure globale</li>
+                <li>Explorez <code>src/auth/auth.module.ts</code> - Authentification simple</li>
+                <li>Regardez <code>src/project/project.controller.ts</code> - Routes HTTP</li>
+                <li>Étudiez <code>src/project/project.service.ts</code> - Logique métier</li>
+                <li>Lisez <code>prisma/schema.prisma</code> - Modèle de données</li>
+                <li>Testez les autres modules</li>
+            </ol>
+
+            <h3>Phase 5: Modifications & Apprentissage</h3>
+            <p>Pratiquez en modifiant le code:</p>
+            <ul class="list-item">
+                <li>Ajoutez un nouveau champ à User dans le schéma</li>
+                <li>Créez une nouvelle route qui récupère les tâches par priorité</li>
+                <li>Ajoutez une validation custom dans un DTO</li>
+                <li>Implémentez un nouveau module simple (ex: Tags pour les projets)</li>
+                <li>Créez un guard personnalisé</li>
+            </ul>
+
+            <h3>🎓 Ressources Recommandées</h3>
+            <ul class="list-item">
+                <li>📚 <strong>NestJS Official Docs:</strong> https://docs.nestjs.com</li>
+                <li>📚 <strong>Prisma Docs:</strong> https://www.prisma.io/docs</li>
+                <li>📚 <strong>TypeScript Handbook:</strong> https://www.typescriptlang.org/docs</li>
+                <li>🎥 <strong>NestJS YouTube Courses</strong> - Rechercher sur YouTube</li>
+                <li>🔗 <strong>NestJS Community Discord</strong> - Poser vos questions</li>
+            </ul>
+
+            <h3>📝 Commandes Utiles</h3>
+            <div class="code-block">
+<span class="comment"># Développement</span>
+npm run start:dev           <span class="comment"># Watch mode</span>
+npm run start:debug         <span class="comment"># Avec debugger</span>
+
+<span class="comment"># Production</span>
+npm run build               <span class="comment"># Compiler TypeScript → JavaScript</span>
+npm run start:prod          <span class="comment"># Lancer la version compilée</span>
+
+<span class="comment"># Tests</span>
+npm test                    <span class="comment"># Tester les units</span>
+npm run test:watch          <span class="comment"># Tests en watch</span>
+npm run test:cov            <span class="comment"># Couverture de test</span>
+npm run test:e2e            <span class="comment"># Tests intégration</span>
+
+<span class="comment"># Code Quality</span>
+npm run lint                <span class="comment"># Linter ESLint</span>
+npm run format              <span class="comment"># Formatter Prettier</span>
+
+<span class="comment"># Base de données</span>
+npx prisma migrate dev      <span class="comment"># Créer une migration</span>
+npx prisma studio          <span class="comment"># GUI Prisma</span>
+npx prisma generate        <span class="comment"># Regenerate Prisma Client</span>
+            </div>
+        </div>
+
+        <!-- CONCLUSION -->
+        <div class="section">
+            <h2>✨ Conclusion</h2>
+            <p>
+                Vous avez maintenant une compréhension complète du projet NestJS.
+                Ce système de gestion de projets est une application professionnelle complète qui couvre:
+            </p>
+            <ul class="list-item">
+                <li>✅ Architecture modulaire et scalable</li>
+                <li>✅ Authentification sécurisée avec JWT</li>
+                <li>✅ Base de données normalisée avec Prisma ORM</li>
+                <li>✅ API RESTful bien documentée</li>
+                <li>✅ Communication temps réel avec WebSockets</li>
+                <li>✅ Gestion avancée des tâches (dépendances, priorités)</li>
+                <li>✅ Notifications et alertes</li>
+                <li>✅ Intégration IA</li>
+            </ul>
+
+            <p style="margin-top: 30px;">
+                <strong>Prochaines étapes recommandées:</strong>
+            </p>
+            <ol>
+                <li>Installez et lancez le projet</li>
+                <li>Testez les endpoints avec Swagger</li>
+                <li>Lisez le code source ligne par ligne</li>
+                <li>Modifiez et expérimentez</li>
+                <li>Construisez un module personnalisé</li>
+                <li>Déployez en production</li>
+            </ol>
+
+            <p style="margin-top: 20px; font-style: italic; color: #666;">
+                "Le meilleur moyen d'apprendre NestJS est de construire quelque chose. Commencez petit,
+                puis expansez progressivement." - Communauté NestJS
+            </p>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p>
+                Rapport généré le 2026-04-06 | Version 1.0<br>
+                Projet NestJS - Gestion des Projets & Tâches<br>
+                Pour imprimer en PDF: Ctrl+P → Enregistrer en PDF
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Ajouter la numérotation automatique pour l'impression
+        window.addEventListener('beforeprint', function() {
+            document.body.style.background = 'white';
+        });
+    </script>
+</body>
+</html>

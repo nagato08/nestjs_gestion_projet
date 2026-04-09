@@ -47,7 +47,7 @@ export class AuthService {
       throw new ConflictException('User already exists');
     }
 
-    // 2️⃣ Sécurité : interdiction de créer un ADMIN
+    //2️⃣ Sécurité : interdiction de créer un ADMIN
     if (role === Role.ADMIN) {
       throw new ForbiddenException('You cannot create an ADMIN user');
     }
@@ -222,6 +222,7 @@ export class AuthService {
         data: {
           isResetPasswordRequested: true,
           resetPasswordToken: createdId,
+          resetPasswordTokenExpiresAt: new Date(Date.now() + 3_600_000), // 1h
         },
       });
 
@@ -257,6 +258,15 @@ export class AuthService {
         );
       }
 
+      if (
+        existUser.resetPasswordTokenExpiresAt &&
+        existUser.resetPasswordTokenExpiresAt < new Date()
+      ) {
+        throw new ConflictException(
+          'Le lien de réinitialisation a expiré. Veuillez faire une nouvelle demande.',
+        );
+      }
+
       return {
         error: false,
         message:
@@ -289,7 +299,16 @@ export class AuthService {
           'Une demande de réinitialisation de mot de passe est déjà en cours',
         );
       }
-      //const createdId = createId();
+
+      if (
+        existUser.resetPasswordTokenExpiresAt &&
+        existUser.resetPasswordTokenExpiresAt < new Date()
+      ) {
+        throw new ConflictException(
+          'Le lien de réinitialisation a expiré. Veuillez faire une nouvelle demande.',
+        );
+      }
+
       const hashedPassword = await bcrypt.hash(password, 10);
 
       await this.prisma.user.update({
@@ -297,6 +316,8 @@ export class AuthService {
         data: {
           password: hashedPassword,
           isResetPasswordRequested: false,
+          resetPasswordToken: null,
+          resetPasswordTokenExpiresAt: null,
         },
       });
       return {
