@@ -12,7 +12,7 @@ export class CreateProjectDto {
   @ApiProperty({ example: 'Projet Alpha' })
   @IsNotEmpty()
   @IsString()
-  name: string;
+  name!: string;
 
   @ApiProperty({ example: 'Application de gestion interne', required: false })
   @IsOptional()
@@ -27,7 +27,7 @@ export class CreateProjectDto {
   @ApiProperty({ enum: Priority })
   @IsNotEmpty()
   @IsEnum(Priority)
-  priority: Priority;
+  priority!: Priority;
 
   @ApiProperty({ enum: ProjectStatus, default: ProjectStatus.PLANNING })
   @IsOptional()
@@ -37,7 +37,7 @@ export class CreateProjectDto {
   @ApiProperty({ example: '2026-01-15' })
   @IsNotEmpty()
   @IsDateString()
-  startDate: string;
+  startDate!: string;
 
   @ApiProperty({ example: '2026-06-30', required: false })
   @IsOptional()

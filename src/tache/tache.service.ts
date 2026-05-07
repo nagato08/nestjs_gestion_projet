@@ -329,7 +329,7 @@ export class TacheService {
         },
         blockedBy: {
           include: {
-            blockedTask: {
+            blockingTask: {
               select: {
                 id: true,
                 title: true,

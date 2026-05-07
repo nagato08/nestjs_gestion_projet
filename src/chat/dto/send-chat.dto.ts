@@ -7,5 +7,5 @@ export class SendChatDto {
   @MinLength(1, {
     message: 'Votre message doit contenir au moins un caractère.',
   })
-  content: string;
+  content!: string;
 }

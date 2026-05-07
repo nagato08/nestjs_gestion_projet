@@ -5,5 +5,5 @@ export class RemoveProjectMemberDto {
   @ApiProperty({ example: 'cuid_user' })
   @IsNotEmpty()
   @IsString()
-  userId: string;
+  userId!: string;
 }

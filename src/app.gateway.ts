@@ -22,7 +22,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   private readonly logger = new Logger(AppGateway.name);
 
   @WebSocketServer()
-  private readonly server: Server;
+  private readonly server!: Server;
 
   constructor(
     private socketService: SocketService,

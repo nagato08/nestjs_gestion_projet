@@ -19,7 +19,7 @@ export class CreateUserDto {
     example: 'John',
     description: 'The first name of the user',
   })
-  firstName: string;
+  firstName!: string;
 
   @IsNotEmpty()
   @IsString({ message: 'lastName must be a string' })
@@ -27,7 +27,7 @@ export class CreateUserDto {
     example: 'Doe',
     description: 'The last name of the user',
   })
-  lastName: string;
+  lastName!: string;
 
   @IsNotEmpty()
   @IsEmail(
@@ -38,7 +38,7 @@ export class CreateUserDto {
     example: 'tadjojeremie@gmail.com',
     description: 'The email of the user',
   })
-  email: string;
+  email!: string;
 
   @IsNotEmpty()
   @IsString({ message: 'password must be a string' })
@@ -47,7 +47,7 @@ export class CreateUserDto {
     description: 'The password of the user',
     minLength: 8,
   })
-  password: string;
+  password!: string;
 
   // ---------------------------
   // Rôle & département
@@ -62,7 +62,7 @@ export class CreateUserDto {
     example: Role.EMPLOYEE,
     description: 'The role assigned by the admin',
   })
-  role: Role;
+  role!: Role;
 
   @IsNotEmpty()
   @IsEnum(Department, {
@@ -73,7 +73,7 @@ export class CreateUserDto {
     example: Department.IT,
     description: 'The department of the user',
   })
-  department: Department;
+  department!: Department;
 
   // ---------------------------
   // Profil (optionnel)

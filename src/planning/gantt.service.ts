@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { TaskStatus } from '@prisma/client';
@@ -32,6 +33,8 @@ type GanttTaskRow = {
  */
 @Injectable()
 export class GanttService {
+  private readonly logger = new Logger(GanttService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   private async ensureProjectAccess(
@@ -53,6 +56,7 @@ export class GanttService {
    * id, title, startDate, endDate, duration (jours), dépendances, assignés.
    */
   async getGanttData(projectId: string, userId: string) {
+    this.logger.debug(`[Gantt] Récupération données pour projet ${projectId}`);
     await this.ensureProjectAccess(projectId, userId);
 
     const tasks = (await this.prisma.task.findMany({
@@ -75,7 +79,11 @@ export class GanttService {
       orderBy: { createdAt: 'asc' },
     })) as unknown as GanttTaskRow[];
 
-    return tasks.map((t) => ({
+    this.logger.log(
+      `✅ [Gantt] ${tasks.length} tâches trouvées pour le projet`,
+    );
+
+    const ganttTasks = tasks.map((t) => ({
       id: t.id,
       title: t.title,
       status: t.status,
@@ -93,5 +101,12 @@ export class GanttService {
       dependencies: t.blockedBy.map((d) => d.blockingTaskId),
       assignees: t.assignments.map((a) => a.user),
     }));
+
+    this.logger.debug(
+      `[Gantt] Données formatées:`,
+      JSON.stringify(ganttTasks.slice(0, 1), null, 2),
+    );
+
+    return ganttTasks;
   }
 }

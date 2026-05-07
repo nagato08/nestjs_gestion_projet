@@ -6,11 +6,15 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Request,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -19,6 +23,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
@@ -43,6 +48,27 @@ export class AuthController {
   @ApiOperation({ summary: "Profile d'un utilisateur" })
   async getProfile(@Request() req) {
     return this.authService.validateUser(req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  @ApiOperation({ summary: 'Mettre à jour le profil utilisateur' })
+  async updateProfile(
+    @Request() req: any,
+    @Body() updateProfileDto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(req.user.sub, updateProfileDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('profile/avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Uploader un avatar' })
+  async uploadAvatar(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.authService.uploadAvatar(req.user.sub, file);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -75,5 +101,11 @@ export class AuthController {
   @Post('reset-password')
   async resetUserPassword(@Body() resetPasswordDto: ResetUserPasswordDto) {
     return this.authService.resetUserPassword({ resetPasswordDto });
+  }
+
+  @Get('enums/departments')
+  @ApiOperation({ summary: 'Récupérer les valeurs enum des départements' })
+  getDepartmentEnums() {
+    return this.authService.getDepartmentEnums();
   }
 }

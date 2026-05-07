@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma.service';
@@ -11,9 +13,10 @@ import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { LoginDTO } from './dto/login.dto';
 import { MailerService } from 'src/mailer.service';
+import { CloudinaryService } from 'src/cloudinary.service';
 import { createId } from '@paralleldrive/cuid2';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
-import { Role } from '@prisma/client';
+import { Role, Department } from '@prisma/client';
 import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
@@ -24,6 +27,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private jwtService: JwtService,
     private mailerService: MailerService,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async register(createUserDto: CreateUserDto) {
@@ -359,5 +363,100 @@ export class AuthService {
       message: 'User soft-deleted successfully',
       user: deletedUser,
     };
+  }
+
+  // Mettre à jour le profil utilisateur
+  async updateProfile(userId: string, updateProfileDto: any) {
+    const { firstName, lastName, email, jobTitle, avatar } = updateProfileDto;
+
+    // Vérifier que l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    // Si l'email change, vérifier qu'il n'existe pas ailleurs
+    if (email && email !== user.email) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+      if (existingUser) {
+        throw new ConflictException('Cet email est déjà utilisé');
+      }
+    }
+
+    // Mettre à jour le profil
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(firstName !== undefined && { firstName }),
+        ...(lastName !== undefined && { lastName }),
+        ...(email !== undefined && { email }),
+        ...(jobTitle !== undefined && { jobTitle }),
+        ...(avatar !== undefined && { avatar }),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        department: true,
+        jobTitle: true,
+        avatar: true,
+      },
+    });
+
+    return updatedUser;
+  }
+
+  // Uploader un avatar
+  async uploadAvatar(userId: string, file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Aucun fichier fourni');
+    }
+
+    // Vérifier que c'est une image
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Le fichier doit être une image');
+    }
+
+    // Vérifier que l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    // Uploader vers Cloudinary
+    const { url } = await this.cloudinaryService.uploadDocument(file, {
+      folder: 'gestion-projets/avatars',
+      resource_type: 'image',
+    });
+
+    // Mettre à jour l'avatar dans la base de données
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar: url },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        avatar: true,
+      },
+    });
+
+    return updatedUser;
+  }
+
+  // Récupérer les valeurs enum des départements
+  getDepartmentEnums() {
+    return Object.values(Department);
   }
 }

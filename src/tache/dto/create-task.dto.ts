@@ -16,7 +16,7 @@ export class CreateTaskDto {
   @ApiProperty({ example: 'Implémenter la fonctionnalité de login' })
   @IsNotEmpty()
   @IsString()
-  title: string;
+  title!: string;
 
   @ApiProperty({
     example: 'Créer le formulaire de connexion avec validation',
@@ -29,7 +29,7 @@ export class CreateTaskDto {
   @ApiProperty({ enum: Priority })
   @IsNotEmpty()
   @IsEnum(Priority)
-  priority: Priority;
+  priority!: Priority;
 
   @ApiProperty({ example: '2026-02-15T10:00:00Z', required: false })
   @IsOptional()
@@ -75,7 +75,7 @@ export class CreateTaskDto {
   @ApiProperty({ example: 'cuid_project_id' })
   @IsNotEmpty()
   @IsString()
-  projectId: string;
+  projectId!: string;
 
   @ApiProperty({ example: 'cuid_parent_task_id', required: false })
   @IsOptional()

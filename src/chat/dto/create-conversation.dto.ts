@@ -4,5 +4,5 @@ export class CreateConversationDto {
   @IsString({
     message: "Vous devez spécifier l'utilisateur.",
   })
-  recipientId: string;
+  recipientId!: string;
 }

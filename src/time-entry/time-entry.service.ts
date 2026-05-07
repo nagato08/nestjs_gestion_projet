@@ -41,6 +41,19 @@ export class TimeEntryService {
   }
 
   /**
+   * UTILITAIRE : Calcule la durée en minutes d'une entrée de temps
+   */
+  private calculateDuration(entry: any): number {
+    if (entry.duration) return entry.duration;
+    if (entry.startTime && entry.endTime) {
+      return Math.floor(
+        (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000 / 60,
+      );
+    }
+    return 0;
+  }
+
+  /**
    * UTILITAIRE : Vérifie si l'utilisateur a un timer actif
    */
   private async getActiveTimer(userId: string) {
@@ -294,7 +307,7 @@ export class TimeEntryService {
     });
 
     const totalMinutes = timeEntries.reduce(
-      (sum, entry) => sum + (entry.duration || 0),
+      (sum, entry) => sum + this.calculateDuration(entry),
       0,
     );
     const totalHours = Math.floor(totalMinutes / 60);
@@ -315,7 +328,7 @@ export class TimeEntryService {
           };
         }
 
-        acc[projectId].totalMinutes += entry.duration || 0;
+        acc[projectId].totalMinutes += this.calculateDuration(entry);
         acc[projectId].entries += 1;
 
         return acc;
@@ -346,7 +359,7 @@ export class TimeEntryService {
           };
         }
 
-        acc[taskId].totalMinutes += entry.duration || 0;
+        acc[taskId].totalMinutes += this.calculateDuration(entry);
         acc[taskId].entries += 1;
 
         return acc;
@@ -425,7 +438,7 @@ export class TimeEntryService {
     });
 
     const totalMinutes = timeEntries.reduce(
-      (sum, entry) => sum + (entry.duration || 0),
+      (sum, entry) => sum + this.calculateDuration(entry),
       0,
     );
 
@@ -445,7 +458,7 @@ export class TimeEntryService {
           };
         }
 
-        acc[userId].totalMinutes += entry.duration || 0;
+        acc[userId].totalMinutes += this.calculateDuration(entry);
         acc[userId].entries += 1;
 
         return acc;
@@ -477,7 +490,7 @@ export class TimeEntryService {
           };
         }
 
-        acc[taskId].totalMinutes += entry.duration || 0;
+        acc[taskId].totalMinutes += this.calculateDuration(entry);
         acc[taskId].entries += 1;
 
         return acc;
