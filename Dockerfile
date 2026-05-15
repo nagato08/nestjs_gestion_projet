@@ -1,29 +1,68 @@
-# 1. Image de base (légère)
-FROM node:20-alpine
+# =========================================
+# STAGE 1 — Builder : install + compile
+# =========================================
+FROM node:22-alpine AS builder
 
-# 2. Créer le dossier de travail dans le conteneur
 WORKDIR /app
 
-# 3. Copier les fichiers de configuration
+RUN apk add --no-cache python3 make g++ openssl
+
+# Retries npm pour résilience aux coupures réseau
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set fetch-timeout 300000
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# 4. Installer les dépendances
-# On utilise 'npm ci' pour une installation propre basée sur le lockfile
-RUN npm ci
+RUN npm ci --prefer-offline --no-audit --no-fund
 
-# 5. Copier le reste du code source
 COPY . .
 
-# 6. Générer le client Prisma (indispensable pour PostgreSQL)
 RUN npx prisma generate
-
-# 7. Compiler le projet NestJS en JavaScript
 RUN npm run build
 
-# 8. Exposer le port (informatif, Render utilisera sa propre config)
+# =========================================
+# STAGE 2 — Runtime : image minimale
+# =========================================
+FROM node:22-alpine AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# openssl pour Prisma, curl pour le healthcheck
+RUN apk add --no-cache openssl curl
+
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Installer les deps de prod + générer le client Prisma
+# Les build-tools sont temporaires (--virtual) : suppression après build
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set fetch-timeout 300000
+
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+  && npm ci --omit=dev --prefer-offline --no-audit --no-fund \
+  && npx prisma generate \
+  && npm cache clean --force \
+  && apk del .build-deps
+
+# Code compilé
+COPY --from=builder /app/dist ./dist
+
+# User non-root
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001 \
+  && chown -R nestjs:nodejs /app
+
+USER nestjs
+
 EXPOSE 4000
 
-# 9. Commande de lancement
-# On utilise une commande qui lance les migrations Prisma PUIS l'app
-CMD npx prisma migrate deploy && node dist/src/main.js
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://localhost:4000/health || exit 1
+
+CMD ["node", "dist/src/main.js"]

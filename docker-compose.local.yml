@@ -1,0 +1,12 @@
+# Fichier de surcharge pour TESTER en local.
+# Usage : docker compose -f docker-compose.prod.yml -f docker-compose.local.yml up --build
+# Ne PAS utiliser sur le VPS (NPM s'occupe du routing en prod).
+
+services:
+  api:
+    ports:
+      - "4000:4000"
+
+  postgres:
+    ports:
+      - "5433:5432" # 5433 pour éviter conflit avec un Postgres local éventuel

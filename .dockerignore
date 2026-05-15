@@ -1,6 +1,51 @@
 node_modules
 dist
+build
+coverage
+.nyc_output
+
+# Secrets / env
 .env
-npm-debug.log
-Dockerfile
+.env.*
+!.env.example
+
+# Git / VCS
 .git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# IDE / OS
+.vscode
+.idea
+*.sublime-*
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Tests
+test
+*.spec.ts
+
+# Prisma — DB locale SQLite (ne doit JAMAIS partir dans l'image)
+prisma/dev.db
+prisma/*.db
+prisma/migrations/dev/
+
+# Divers
+README.md
+*.md
+.editorconfig
+.prettierrc*
+.eslintrc*
+eslint.config.*
+.husky

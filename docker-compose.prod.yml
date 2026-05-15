@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tuto-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tuto-api:latest
+    container_name: tuto-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["npx", "prisma", "migrate", "deploy"]
+    networks:
+      - internal
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tuto-api:latest
+    container_name: tuto-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      CLOUDINARY_URL: ${CLOUDINARY_URL}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    networks:
+      - internal
+      - web
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+  web:
+    external: true

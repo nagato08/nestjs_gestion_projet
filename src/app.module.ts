@@ -19,6 +19,7 @@ import { PlanningModule } from './planning/planning.module';
 import { PrismaService } from './prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AiModule } from './ai/ai.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -42,7 +43,7 @@ import { AiModule } from './ai/ai.module';
     PlanningModule,
     AiModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [
     AppService,
     AppGateway,

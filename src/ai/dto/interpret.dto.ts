@@ -5,7 +5,7 @@ export class InterpretDto {
   @ApiProperty({ example: 'cuid_project_123' })
   @IsNotEmpty()
   @IsString()
-  projectId: string;
+  projectId!: string;
 
   @ApiProperty({
     example:
@@ -15,5 +15,5 @@ export class InterpretDto {
   @IsString()
   @MinLength(3)
   @MaxLength(2000)
-  message: string;
+  message!: string;
 }
