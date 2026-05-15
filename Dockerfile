@@ -37,9 +37,12 @@ RUN apk add --no-cache openssl curl
 
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
 # Installer les deps de prod + générer le client Prisma
 # Les build-tools sont temporaires (--virtual) : suppression après build
+# prisma + dotenv installés en plus (devDeps) : requis par prisma.config.ts
+# et par "prisma migrate deploy" au runtime (--no-save : lockfile intact)
 RUN npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 20000 \
   && npm config set fetch-retry-maxtimeout 120000 \
@@ -47,6 +50,7 @@ RUN npm config set fetch-retries 5 \
 
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
   && npm ci --omit=dev --prefer-offline --no-audit --no-fund \
+  && npm install --no-save --prefer-offline --no-audit --no-fund prisma dotenv \
   && npx prisma generate \
   && npm cache clean --force \
   && apk del .build-deps
