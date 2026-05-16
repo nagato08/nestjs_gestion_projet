@@ -18,10 +18,10 @@ services:
       - internal
 
   migrate:
+    image: ${API_IMAGE:-ghcr.io/nagato08/nestjs_gestion_projet:latest}
     build:
       context: .
       dockerfile: Dockerfile
-    image: tuto-api:latest
     container_name: tuto-migrate
     depends_on:
       postgres:
@@ -34,10 +34,10 @@ services:
     restart: "no"
 
   api:
+    image: ${API_IMAGE:-ghcr.io/nagato08/nestjs_gestion_projet:latest}
     build:
       context: .
       dockerfile: Dockerfile
-    image: tuto-api:latest
     container_name: tuto-api
     restart: unless-stopped
     depends_on:
