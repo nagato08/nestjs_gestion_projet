@@ -43,11 +43,15 @@ export class TimeEntryService {
   /**
    * UTILITAIRE : Calcule la durée en minutes d'une entrée de temps
    */
-  private calculateDuration(entry: any): number {
+  private calculateDuration(entry: {
+    duration: number | null;
+    startTime: Date | null;
+    endTime: Date | null;
+  }): number {
     if (entry.duration) return entry.duration;
     if (entry.startTime && entry.endTime) {
       return Math.floor(
-        (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000 / 60,
+        (entry.endTime.getTime() - entry.startTime.getTime()) / 1000 / 60,
       );
     }
     return 0;
