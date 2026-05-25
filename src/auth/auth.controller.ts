@@ -72,9 +72,11 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.PROJECT_MANAGER)
   @Get('users')
-  @ApiOperation({ summary: 'Liste des utilisateurs (réservé aux admins)' })
+  @ApiOperation({
+    summary: 'Liste des utilisateurs (admins et chefs de projet)',
+  })
   async getAllUsers() {
     return this.authService.getAllUsers();
   }
