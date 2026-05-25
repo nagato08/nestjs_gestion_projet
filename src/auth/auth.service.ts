@@ -17,7 +17,7 @@ import { CloudinaryService } from 'src/cloudinary.service';
 import { createId } from '@paralleldrive/cuid2';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { Role, Department } from '@prisma/client';
-import { ForbiddenException } from '@nestjs/common';
+// import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -52,9 +52,9 @@ export class AuthService {
     }
 
     //2️⃣ Sécurité : interdiction de créer un ADMIN
-    if (role === Role.ADMIN) {
-      throw new ForbiddenException('You cannot create an ADMIN user');
-    }
+    // if (role === Role.ADMIN) {
+    //   throw new ForbiddenException('You cannot create an ADMIN user');
+    // }
 
     // 3️⃣ Hash du mot de passe
     const saltRounds = 10;
