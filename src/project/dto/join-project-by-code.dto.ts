@@ -5,5 +5,5 @@ export class JoinProjectByCodeDto {
   @ApiProperty({ example: 'CODE-XYZ-2025' })
   @IsNotEmpty()
   @IsString()
-  projectCode: string;
+  projectCode!: string;
 }
