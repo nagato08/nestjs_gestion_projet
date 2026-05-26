@@ -64,6 +64,10 @@ export class PertService {
       },
     })) as unknown as PertTaskRow[];
 
+    if (tasks.length === 0) {
+      return { nodes: [], edges: [], criticalPath: [] };
+    }
+
     const taskMap = new Map(
       tasks.map((t) => [
         t.id,
@@ -142,8 +146,10 @@ export class PertService {
       }
     }
 
-    let maxLen = 0;
-    let endIdx = 0;
+    if (n === 0) return [];
+
+    let maxLen = -1;
+    let endIdx = -1;
     for (let i = 0; i < n; i++) {
       if ((L[i] ?? 0) > maxLen) {
         maxLen = L[i]!;
@@ -151,11 +157,15 @@ export class PertService {
       }
     }
 
+    if (endIdx < 0) return [];
+
     const path: string[] = [];
     let idx = endIdx;
-    while (idx >= 0) {
-      path.unshift(tasks[idx].id);
-      idx = prev[idx];
+    while (idx >= 0 && idx < n) {
+      const t = tasks[idx];
+      if (!t) break;
+      path.unshift(t.id);
+      idx = prev[idx] ?? -1;
     }
     return path;
   }
