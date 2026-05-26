@@ -10,16 +10,19 @@ import {
 
 export class CreateManualTimeEntryDto {
   @ApiProperty({ example: 'cuid_task_id' })
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: "L'identifiant de la tâche est requis" })
+  @IsString({ message: "L'identifiant doit être une chaîne de caractères" })
   taskId: string;
 
   @ApiProperty({
     example: '2026-01-15T09:00:00Z',
     description: 'Date et heure de début',
   })
-  @IsNotEmpty()
-  @IsDateString()
+  @IsNotEmpty({ message: "L'heure de début est requise" })
+  @IsDateString(
+    {},
+    { message: "Heure de début invalide (format ISO attendu)" },
+  )
   startTime: string;
 
   @ApiProperty({
@@ -28,7 +31,7 @@ export class CreateManualTimeEntryDto {
     required: false,
   })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: 'Heure de fin invalide (format ISO attendu)' })
   endTime?: string;
 
   @ApiProperty({
@@ -37,7 +40,7 @@ export class CreateManualTimeEntryDto {
     required: false,
   })
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsInt({ message: 'La durée doit être un entier (minutes)' })
+  @Min(1, { message: 'La durée doit être supérieure à 0' })
   duration?: number;
 }

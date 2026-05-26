@@ -4,7 +4,9 @@ import { TaskStatus } from '@prisma/client';
 
 export class ChangeTaskStatusDto {
   @ApiProperty({ enum: TaskStatus, example: TaskStatus.DOING })
-  @IsNotEmpty()
-  @IsEnum(TaskStatus)
+  @IsNotEmpty({ message: 'Le statut est requis' })
+  @IsEnum(TaskStatus, {
+    message: 'Statut de tâche invalide (TODO, DOING, DONE)',
+  })
   status: TaskStatus;
 }

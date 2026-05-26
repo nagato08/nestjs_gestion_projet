@@ -6,7 +6,7 @@ export class CreateTaskDependencyDto {
     example: 'cuid_blocked_task_id',
     description: 'ID de la tâche qui est bloquée (doit attendre)',
   })
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: "L'identifiant de la tâche bloquée est requis" })
+  @IsString({ message: "L'identifiant doit être une chaîne de caractères" })
   blockedTaskId: string;
 }

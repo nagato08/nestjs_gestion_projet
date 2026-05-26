@@ -4,6 +4,6 @@ import { IsOptional, IsString } from 'class-validator';
 export class UpdateDocumentDto {
   @ApiProperty({ example: 'Rapport_Projet_2025_v2.pdf', required: false })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Le nom doit être une chaîne de caractères' })
   name?: string;
 }

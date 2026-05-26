@@ -13,26 +13,26 @@ import {
 import { Role, Department } from '@prisma/client';
 
 export class CreateUserDto {
-  @IsNotEmpty()
-  @IsString({ message: 'firstName must be a string' })
+  @IsNotEmpty({ message: 'Le prénom est requis' })
+  @IsString({ message: 'Le prénom doit être une chaîne de caractères' })
   @ApiProperty({
     example: 'John',
     description: 'The first name of the user',
   })
   firstName!: string;
 
-  @IsNotEmpty()
-  @IsString({ message: 'lastName must be a string' })
+  @IsNotEmpty({ message: 'Le nom de famille est requis' })
+  @IsString({ message: 'Le nom doit être une chaîne de caractères' })
   @ApiProperty({
     example: 'Doe',
     description: 'The last name of the user',
   })
   lastName!: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "L'email est requis" })
   @IsEmail(
     { blacklisted_chars: "!#$%&'*+/=?^_`{|}~ " },
-    { message: 'email must be a valid email address' },
+    { message: "Format d'email invalide" },
   )
   @ApiProperty({
     example: 'tadjojeremie@gmail.com',
@@ -40,9 +40,11 @@ export class CreateUserDto {
   })
   email!: string;
 
-  @IsNotEmpty()
-  @IsString({ message: 'password must be a string' })
-  @MinLength(8, { message: 'password must be at least 8 characters long' })
+  @IsNotEmpty({ message: 'Le mot de passe est requis' })
+  @IsString({ message: 'Le mot de passe doit être une chaîne de caractères' })
+  @MinLength(8, {
+    message: 'Le mot de passe doit contenir au moins 8 caractères',
+  })
   @ApiProperty({
     description: 'The password of the user',
     minLength: 8,
@@ -53,9 +55,9 @@ export class CreateUserDto {
   // Rôle & département
   // ---------------------------
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Le rôle est requis' })
   @IsEnum(Role, {
-    message: 'role must be either PROJECT_MANAGER or EMPLOYEE',
+    message: 'Rôle invalide (ADMIN, PROJECT_MANAGER ou EMPLOYEE)',
   })
   @ApiProperty({
     enum: Role,
@@ -64,9 +66,9 @@ export class CreateUserDto {
   })
   role!: Role;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Le département est requis' })
   @IsEnum(Department, {
-    message: 'department must be a valid Department enum value',
+    message: 'Département invalide',
   })
   @ApiProperty({
     enum: Department,
@@ -80,7 +82,7 @@ export class CreateUserDto {
   // ---------------------------
 
   @IsOptional()
-  @IsString({ message: 'jobTitle must be a string' })
+  @IsString({ message: 'Le poste doit être une chaîne de caractères' })
   @ApiProperty({
     example: 'Backend Developer',
     required: false,
@@ -88,7 +90,7 @@ export class CreateUserDto {
   jobTitle?: string;
 
   @IsOptional()
-  @IsString({ message: 'avatar must be a string (URL)' })
+  @IsString({ message: "L'avatar doit être une URL (chaîne de caractères)" })
   @ApiProperty({
     example: 'https://cdn.app.com/avatars/user.png',
     required: false,

@@ -3,8 +3,8 @@ import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateCommentDto {
   @ApiProperty({ example: 'Cette tâche nécessite une révision du design' })
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: 'Le contenu du commentaire est requis' })
+  @IsString({ message: 'Le contenu doit être une chaîne de caractères' })
   content: string;
 
   @ApiProperty({
@@ -13,7 +13,10 @@ export class CreateCommentDto {
     required: false,
   })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
+  @IsArray({ message: 'Les mentions doivent être un tableau' })
+  @IsString({
+    each: true,
+    message: 'Chaque mention doit être une chaîne de caractères',
+  })
   mentions?: string[];
 }

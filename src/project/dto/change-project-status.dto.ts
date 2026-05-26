@@ -4,6 +4,6 @@ import { ProjectStatus } from '@prisma/client';
 
 export class ChangeProjectStatusDto {
   @ApiProperty({ enum: ProjectStatus })
-  @IsEnum(ProjectStatus)
+  @IsEnum(ProjectStatus, { message: 'Statut de projet invalide' })
   status!: ProjectStatus;
 }

@@ -2,22 +2,22 @@ import { IsString, IsOptional, IsEmail } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Le prénom doit être une chaîne de caractères' })
   firstName?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Le nom doit être une chaîne de caractères' })
   lastName?: string;
 
   @IsOptional()
-  @IsEmail()
+  @IsEmail({}, { message: "Format d'email invalide" })
   email?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Le poste doit être une chaîne de caractères' })
   jobTitle?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: "L'avatar doit être une URL (chaîne de caractères)" })
   avatar?: string;
 }

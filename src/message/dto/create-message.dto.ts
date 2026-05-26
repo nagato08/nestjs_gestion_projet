@@ -3,9 +3,9 @@ import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateMessageDto {
   @ApiProperty({ example: 'Bonjour, avez-vous des nouvelles sur le projet ?' })
-  @IsNotEmpty()
-  @IsString()
-  content: string;
+  @IsNotEmpty({ message: 'Le contenu du message est requis' })
+  @IsString({ message: 'Le contenu doit être une chaîne de caractères' })
+  content!: string;
 
   @ApiProperty({
     example: ['cuid_user_1', 'cuid_user_2'],
@@ -13,7 +13,10 @@ export class CreateMessageDto {
     required: false,
   })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
+  @IsArray({ message: 'Les mentions doivent être un tableau' })
+  @IsString({
+    each: true,
+    message: 'Chaque mention doit être une chaîne de caractères',
+  })
   mentions?: string[];
 }
