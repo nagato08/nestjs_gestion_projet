@@ -24,10 +24,9 @@ import { HealthController } from './health/health.controller';
 @Module({
   imports: [
     ThrottlerModule.forRoot([
-      {
-        ttl: 60_000, // 1 minute
-        limit: 10, // 10 requêtes max par minute par IP
-      },
+      { name: 'short', ttl: 1_000, limit: 20 },
+      { name: 'medium', ttl: 10_000, limit: 100 },
+      { name: 'long', ttl: 60_000, limit: 300 },
     ]),
     AuthModule,
     ChatModule,
