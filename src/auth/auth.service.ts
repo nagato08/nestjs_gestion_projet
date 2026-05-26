@@ -42,48 +42,71 @@ export class AuthService {
       avatar,
     } = createUserDto;
 
-    // 1️⃣ Vérifier si l'utilisateur existe déjà
     const existUser = await this.prisma.user.findUnique({
       where: { email },
     });
 
-    if (existUser) {
-      throw new ConflictException('User already exists');
-    }
-
-    //2️⃣ Sécurité : interdiction de créer un ADMIN
-    // if (role === Role.ADMIN) {
-    //   throw new ForbiddenException('You cannot create an ADMIN user');
-    // }
-
-    // 3️⃣ Hash du mot de passe
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // 4️⃣ Création de l'utilisateur
-    const user = await this.prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        password: hashedPassword,
-        role,
-        department,
-        jobTitle,
-        avatar,
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-        department: true,
-        jobTitle: true,
-        avatar: true,
-        createdAt: true,
-      },
-    });
+    const userSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      department: true,
+      jobTitle: true,
+      avatar: true,
+      createdAt: true,
+    } as const;
+
+    let user: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      role: Role;
+      department: Department;
+      jobTitle: string | null;
+      avatar: string | null;
+      createdAt: Date;
+    };
+
+    if (existUser && existUser.deletedAt === null) {
+      throw new ConflictException('Cet email est déjà utilisé');
+    }
+
+    if (existUser && existUser.deletedAt !== null) {
+      user = await this.prisma.user.update({
+        where: { id: existUser.id },
+        data: {
+          firstName,
+          lastName,
+          password: hashedPassword,
+          role,
+          department,
+          jobTitle,
+          avatar,
+          deletedAt: null,
+        },
+        select: userSelect,
+      });
+    } else {
+      user = await this.prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          password: hashedPassword,
+          role,
+          department,
+          jobTitle,
+          avatar,
+        },
+        select: userSelect,
+      });
+    }
 
     // 5️⃣ Envoi de l’email
     await this.mailerService.sendEmailFromRegister({
@@ -106,19 +129,17 @@ export class AuthService {
   async login(loginDto: LoginDTO) {
     const { email, password } = loginDto;
 
-    // 1️⃣ Chercher l'utilisateur par email
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.deletedAt !== null) {
+      throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // 2️⃣ Vérifier le mot de passe
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
     // 3️⃣ Préparer le payload JWT (on inclut le role pour les guards)
@@ -210,7 +231,7 @@ export class AuthService {
         where: { email },
       });
 
-      if (!existUser) {
+      if (!existUser || existUser.deletedAt !== null) {
         throw new ConflictException("L'utilisateur n'existe pas");
       }
 
