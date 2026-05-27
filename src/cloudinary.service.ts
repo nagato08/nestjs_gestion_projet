@@ -22,7 +22,7 @@ export class CloudinaryService {
   async uploadDocument(
     file: Express.Multer.File,
     options?: UploadApiOptions,
-  ): Promise<{ url: string; publicId: string }> {
+  ): Promise<{ url: string; publicId: string; bytes: number }> {
     if (!process.env.CLOUDINARY_URL) {
       throw new Error(
         'CLOUDINARY_URL non définie. Impossible de téléverser le document.',
@@ -54,6 +54,7 @@ export class CloudinaryService {
           resolve({
             url: result.secure_url,
             publicId: result.public_id,
+            bytes: result.bytes,
           });
         },
       );

@@ -231,6 +231,7 @@ model DocumentVersion {
   id         String @id @default(cuid())
   version    Int
   fileUrl    String
+  fileSize   Int?
   documentId String
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)

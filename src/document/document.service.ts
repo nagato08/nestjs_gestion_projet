@@ -203,6 +203,7 @@ export class DocumentService {
       data: {
         version: nextVersion,
         fileUrl,
+        fileSize: uploadResult.bytes,
         documentId,
       },
       include: {
