@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { LoginDTO } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -79,6 +80,17 @@ export class AuthController {
   })
   async getAllUsers() {
     return this.authService.getAllUsers();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('users')
+  @ApiOperation({
+    summary:
+      'Créer un utilisateur (admin uniquement). Mot de passe généré + envoyé par email.',
+  })
+  async adminCreateUser(@Body() dto: AdminCreateUserDto) {
+    return this.authService.createUserByAdmin(dto);
   }
 
   @Delete(':id')

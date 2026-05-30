@@ -3,7 +3,15 @@
 # Ne PAS utiliser sur le VPS (NPM s'occupe du routing en prod).
 
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
   api:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "4000:4000"
 

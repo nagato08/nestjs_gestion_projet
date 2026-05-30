@@ -10,7 +10,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { LoginDTO } from './dto/login.dto';
 import { MailerService } from 'src/mailer.service';
 import { CloudinaryService } from 'src/cloudinary.service';
@@ -124,6 +126,78 @@ export class AuthService {
     const access_token = await this.jwtService.signAsync(payload);
 
     return { access_token, user };
+  }
+
+  async createUserByAdmin(dto: AdminCreateUserDto) {
+    const { firstName, lastName, email, role, department, jobTitle } = dto;
+
+    const existUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existUser && existUser.deletedAt === null) {
+      throw new ConflictException('Cet email est déjà utilisé');
+    }
+
+    const tempPassword = crypto.randomBytes(9).toString('base64url');
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    const userSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      department: true,
+      jobTitle: true,
+      avatar: true,
+      createdAt: true,
+    } as const;
+
+    const user =
+      existUser && existUser.deletedAt !== null
+        ? await this.prisma.user.update({
+            where: { id: existUser.id },
+            data: {
+              firstName,
+              lastName,
+              password: hashedPassword,
+              role,
+              department,
+              jobTitle,
+              avatar: null,
+              deletedAt: null,
+            },
+            select: userSelect,
+          })
+        : await this.prisma.user.create({
+            data: {
+              firstName,
+              lastName,
+              email,
+              password: hashedPassword,
+              role,
+              department,
+              jobTitle,
+            },
+            select: userSelect,
+          });
+
+    try {
+      await this.mailerService.sendAdminCreatedAccountEmail({
+        recipient: email,
+        firstName,
+        email,
+        password: tempPassword,
+      });
+    } catch (err) {
+      this.logger.error('Échec envoi email credentials', err as Error);
+      throw new BadRequestException(
+        "Le compte a été créé mais l'email n'a pas pu être envoyé. Contactez l'administrateur.",
+      );
+    }
+
+    return user;
   }
 
   async login(loginDto: LoginDTO) {
