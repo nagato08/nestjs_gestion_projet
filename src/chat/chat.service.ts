@@ -74,6 +74,7 @@ export class ChatService {
             id: true,
             content: true,
             createdAt: true,
+            senderId: true,
             sender: {
               select: {
                 id: true,
@@ -89,12 +90,15 @@ export class ChatService {
       },
     });
 
-    const lastMessage = (updated as { messages: typeof updated.messages })
-      .messages[0];
+    const raw = (updated as { messages: typeof updated.messages }).messages[0];
+    const lastMessage = raw
+      ? { ...raw, userId: raw.senderId, user: raw.sender, projectId }
+      : null;
+
     if (this.socketService.server && lastMessage) {
       this.socketService.server
         .to(`project:${projectId}`)
-        .emit('project-chat-message', lastMessage);
+        .emit('message:new', lastMessage);
     }
 
     return {
@@ -127,6 +131,7 @@ export class ChatService {
             id: true,
             content: true,
             createdAt: true,
+            senderId: true,
             sender: {
               select: {
                 id: true,
@@ -144,6 +149,17 @@ export class ChatService {
     if (!conversation) {
       return { id: null, projectId, messages: [] };
     }
-    return conversation;
+
+    return {
+      ...conversation,
+      messages: conversation.messages.map((msg) => ({
+        id: msg.id,
+        content: msg.content,
+        createdAt: msg.createdAt,
+        projectId,
+        userId: msg.senderId,
+        user: msg.sender,
+      })),
+    };
   }
 }
