@@ -77,7 +77,7 @@ export class ProjectService {
 
   // 2️⃣ Récupérer les projets d'un utilisateur (Dashboard)
   async getMyProjects(userId: string) {
-    return await this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: {
         members: { some: { userId } },
         deletedAt: null, // ✅ Exclure les projets supprimés
@@ -92,6 +92,25 @@ export class ProjectService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    if (projects.length === 0) return projects;
+
+    const doneCounts = await this.prisma.task.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: projects.map((p) => p.id) },
+        status: 'DONE',
+      },
+      _count: { _all: true },
+    });
+    const doneMap = new Map(
+      doneCounts.map((d) => [d.projectId, d._count._all]),
+    );
+
+    return projects.map((p) => ({
+      ...p,
+      completedTasksCount: doneMap.get(p.id) ?? 0,
+    }));
   }
 
   // 3️⃣ Récupérer un projet par ID avec vérification d'accès
@@ -118,6 +137,7 @@ export class ProjectService {
             },
           },
         },
+        _count: { select: { tasks: true, members: true } },
       },
     });
 
@@ -127,7 +147,11 @@ export class ProjectService {
     if (!isMember)
       throw new ForbiddenException("Vous n'avez pas accès à ce projet");
 
-    return project;
+    const completedTasksCount = await this.prisma.task.count({
+      where: { projectId, status: 'DONE' },
+    });
+
+    return { ...project, completedTasksCount };
   }
 
   // 4️⃣ Mettre à jour (Utilise l'utilitaire privé)

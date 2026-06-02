@@ -13,7 +13,7 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
-import { Role, TaskStatus } from '@prisma/client';
+import { ProjectStatus, Role, TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class TacheService {
@@ -765,31 +765,62 @@ export class TacheService {
     userId: string,
     dto: ChangeTaskStatusDto,
   ) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
 
-    const updatedTask = await this.prisma.task.update({
-      where: { id: taskId },
-      data: { status: dto.status },
-      include: {
-        assignments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
+    // Si on passe en DOING : vérifier que les bloqueurs sont terminés
+    if (dto.status === TaskStatus.DOING) {
+      const blockers = await this.prisma.taskDependency.findMany({
+        where: { blockedTaskId: taskId },
+        include: {
+          blockingTask: { select: { id: true, title: true, status: true } },
+        },
+      });
+      const unfinished = blockers
+        .map((b) => b.blockingTask)
+        .filter((t) => t.status !== TaskStatus.DONE);
+      if (unfinished.length > 0) {
+        const names = unfinished.map((t) => `"${t.title}"`).join(', ');
+        throw new ForbiddenException(
+          `Cette tâche est bloquée par ${names}. Terminez d'abord ces tâches.`,
+        );
+      }
+    }
+
+    const updatedTask = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.task.update({
+        where: { id: taskId },
+        data: { status: dto.status },
+        include: {
+          assignments: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                },
               },
             },
           },
-        },
-        _count: {
-          select: {
-            subTasks: true,
-            comments: true,
+          _count: {
+            select: {
+              subTasks: true,
+              comments: true,
+            },
           },
         },
-      },
+      });
+
+      // Si on démarre une tâche → le projet passe de PLANNING à ACTIVE
+      if (dto.status === TaskStatus.DOING) {
+        await tx.project.updateMany({
+          where: { id: projectId, status: ProjectStatus.PLANNING },
+          data: { status: ProjectStatus.ACTIVE },
+        });
+      }
+
+      return updated;
     });
 
     return updatedTask;
