@@ -429,33 +429,149 @@ export class AuthService {
     }
   }
 
-  async deleteUser(userId: string) {
-    // 1️⃣ Vérifier que l'utilisateur existe
+  async getUserImpact(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+    const [projectsOwned, taskAssignments, projectMemberships] =
+      await Promise.all([
+        this.prisma.project.findMany({
+          where: { ownerId: userId, deletedAt: null },
+          select: { id: true, name: true, status: true },
+        }),
+        this.prisma.taskAssignment.findMany({
+          where: { userId },
+          select: {
+            taskId: true,
+            task: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                projectId: true,
+                project: { select: { id: true, name: true } },
+              },
+            },
+          },
+        }),
+        this.prisma.projectMember.findMany({
+          where: { userId, project: { deletedAt: null } },
+          select: {
+            project: { select: { id: true, name: true } },
+          },
+        }),
+      ]);
+
+    return {
+      user,
+      projectsOwned,
+      tasksAssigned: taskAssignments.map((a) => a.task),
+      projectsMember: projectMemberships.map((p) => p.project),
+      hasImpact:
+        projectsOwned.length > 0 ||
+        taskAssignments.length > 0 ||
+        projectMemberships.length > 0,
+    };
+  }
+
+  async deleteUser(userId: string, reassignTo?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    if (user.deletedAt) {
+      throw new ConflictException('Utilisateur déjà supprimé');
     }
 
-    // 2️⃣ Soft delete en ajoutant deletedAt
-    const deletedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: { deletedAt: new Date() },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-        department: true,
-        deletedAt: true,
-      },
+    const impact = await this.getUserImpact(userId);
+
+    if (impact.hasImpact && !reassignTo) {
+      throw new BadRequestException(
+        "Cet utilisateur a des projets ou tâches assignés. Sélectionnez un utilisateur de remplacement.",
+      );
+    }
+
+    if (reassignTo) {
+      if (reassignTo === userId) {
+        throw new BadRequestException(
+          'Le remplaçant doit être différent de la personne supprimée',
+        );
+      }
+      const replacement = await this.prisma.user.findUnique({
+        where: { id: reassignTo },
+      });
+      if (!replacement || replacement.deletedAt) {
+        throw new NotFoundException('Utilisateur de remplacement introuvable');
+      }
+    }
+
+    const deletedUser = await this.prisma.$transaction(async (tx) => {
+      if (reassignTo) {
+        // 1. Transférer ownership des projets
+        if (impact.projectsOwned.length > 0) {
+          await tx.project.updateMany({
+            where: { ownerId: userId },
+            data: { ownerId: reassignTo },
+          });
+        }
+
+        // 2. Transférer assignments de tâches (en évitant les doublons)
+        for (const task of impact.tasksAssigned) {
+          const exists = await tx.taskAssignment.findUnique({
+            where: {
+              taskId_userId: { taskId: task.id, userId: reassignTo },
+            },
+          });
+          if (!exists) {
+            await tx.taskAssignment.update({
+              where: {
+                taskId_userId: { taskId: task.id, userId },
+              },
+              data: { userId: reassignTo },
+            });
+          } else {
+            // Le remplaçant est déjà assigné → on supprime juste l'assignation de l'ancien
+            await tx.taskAssignment.delete({
+              where: { taskId_userId: { taskId: task.id, userId } },
+            });
+          }
+        }
+
+        // 3. Ajouter le remplaçant comme membre des projets de l'utilisateur (s'il ne l'est pas déjà)
+        for (const p of impact.projectsMember) {
+          const exists = await tx.projectMember.findUnique({
+            where: {
+              projectId_userId: { projectId: p.id, userId: reassignTo },
+            },
+          });
+          if (!exists) {
+            await tx.projectMember.create({
+              data: { projectId: p.id, userId: reassignTo },
+            });
+          }
+        }
+      }
+
+      return tx.user.update({
+        where: { id: userId },
+        data: { deletedAt: new Date() },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          department: true,
+          deletedAt: true,
+        },
+      });
     });
 
     return {
-      message: 'User soft-deleted successfully',
+      message: 'Utilisateur supprimé avec succès',
       user: deletedUser,
     };
   }

@@ -72,30 +72,32 @@ export class MessageService {
       },
     });
 
-    // Envoyer le message en temps réel dans la room du projet
+    // Payload aplati pour matcher SocketEventMap['project:message:new'] côté front
+    const socketPayload = {
+      id: message.id,
+      content: message.content,
+      projectId: message.projectId,
+      userId: message.userId,
+      user: {
+        id: message.user.id,
+        firstName: message.user.firstName,
+        lastName: message.user.lastName,
+        avatar: message.user.avatar ?? undefined,
+      },
+      mentions: message.mentions ?? [],
+      createdAt: message.createdAt.toISOString(),
+    };
+
     if (this.socketService.server) {
-      // Envoyer le message à tous les membres connectés dans la room du projet
       this.socketService.server
         .to(`project:${projectId}`)
-        .emit('project-message', {
-          message,
-          project: { id: message.project.id, name: message.project.name },
-        });
+        .emit('project:message:new', socketPayload);
 
-      // Notifier les utilisateurs mentionnés spécifiquement (même s'ils ne sont pas dans la room)
       if (dto.mentions && dto.mentions.length > 0) {
-        const project = await this.prisma.project.findUnique({
-          where: { id: projectId },
-          select: { id: true, name: true },
-        });
-
         dto.mentions.forEach((mentionedUserId) => {
           this.socketService.server
             .to(`user:${mentionedUserId}`)
-            .emit('mentioned-in-project-message', {
-              message,
-              project: project || { id: projectId, name: '' },
-            });
+            .emit('mentioned-in-project-message', socketPayload);
         });
       }
     }

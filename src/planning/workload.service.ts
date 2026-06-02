@@ -5,13 +5,18 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 
-/** Seuil hebdo en minutes (40h) pour alerter surcharge */
-const DEFAULT_WEEKLY_MINUTES = 40 * 60;
+const DEFAULT_WEEKLY_HOURS = 40;
+const DEFAULT_DAILY_HOURS = 8;
 
-/**
- * Histogramme de charge : heures par employé par jour ou par semaine.
- * Si un employé dépasse 40h/semaine, le front peut afficher en rouge.
- */
+type WorkloadEntry = {
+  userId: string;
+  userName: string;
+  avatar: string | null;
+  hours: number;
+  isOverloaded: boolean;
+  byPeriod: { date: string; hours: number }[];
+};
+
 @Injectable()
 export class WorkloadService {
   constructor(private readonly prisma: PrismaService) {}
@@ -30,10 +35,6 @@ export class WorkloadService {
       throw new ForbiddenException("Vous n'avez pas accès à ce projet");
   }
 
-  /**
-   * Charge par utilisateur et par jour (ou par semaine si groupBy=week).
-   * projectId optionnel : si fourni, seules les entrées des tâches de ce projet sont comptées.
-   */
   async getWorkload(
     userId: string,
     startDate: string,
@@ -46,6 +47,27 @@ export class WorkloadService {
 
     if (projectId) await this.ensureProjectAccess(projectId, userId);
 
+    const overloadThresholdHours =
+      groupBy === 'week' ? DEFAULT_WEEKLY_HOURS : DEFAULT_DAILY_HOURS;
+
+    // 1. Récupérer tous les membres concernés (du projet si fourni, sinon ceux ayant pointé)
+    const projectMembers = projectId
+      ? await this.prisma.projectMember.findMany({
+          where: { projectId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+          },
+        })
+      : [];
+
+    // 2. Récupérer les TimeEntry terminés sur la période
     const where: {
       endTime: { not: null; gte?: Date; lte?: Date };
       task?: { projectId: string };
@@ -60,23 +82,23 @@ export class WorkloadService {
         user: {
           select: { id: true, firstName: true, lastName: true, avatar: true },
         },
-        task: { select: { id: true, title: true, projectId: true } },
       },
     });
 
-    const byUser = new Map<
-      string,
-      {
-        userId: string;
-        userName: string;
-        avatar: string | null;
-        byDay: { date: string; minutes: number }[];
-        byWeek?: { weekStart: string; minutes: number }[];
-        totalMinutes: number;
-        isOverloaded: boolean;
-      }
-    >();
+    // 3. Initialiser une map avec tous les membres (charge 0)
+    const byUser = new Map<string, WorkloadEntry>();
+    for (const m of projectMembers) {
+      byUser.set(m.user.id, {
+        userId: m.user.id,
+        userName: `${m.user.firstName} ${m.user.lastName}`,
+        avatar: m.user.avatar,
+        hours: 0,
+        isOverloaded: false,
+        byPeriod: [],
+      });
+    }
 
+    // 4. Agréger les minutes par utilisateur et période
     for (const e of entries) {
       if (!e.duration || !e.endTime) continue;
       const u = e.user;
@@ -85,51 +107,51 @@ export class WorkloadService {
           userId: u.id,
           userName: `${u.firstName} ${u.lastName}`,
           avatar: u.avatar,
-          byDay: [],
-          totalMinutes: 0,
+          hours: 0,
           isOverloaded: false,
+          byPeriod: [],
         });
       }
       const rec = byUser.get(u.id)!;
-      const dayKey = e.endTime.toISOString().split('T')[0];
-      const existing = rec.byDay.find((d) => d.date === dayKey);
-      if (existing) existing.minutes += e.duration;
-      else rec.byDay.push({ date: dayKey, minutes: e.duration });
-      rec.totalMinutes += e.duration;
+      const periodKey =
+        groupBy === 'week'
+          ? getWeekStart(e.endTime)
+          : e.endTime.toISOString().split('T')[0];
+      const existing = rec.byPeriod.find((p) => p.date === periodKey);
+      const hours = e.duration / 60;
+      if (existing) existing.hours += hours;
+      else rec.byPeriod.push({ date: periodKey, hours });
     }
 
+    // 5. Finaliser : trier byPeriod, calculer total, flag surcharge
+    let totalHours = 0;
     for (const rec of byUser.values()) {
-      rec.byDay.sort((a, b) => a.date.localeCompare(b.date));
-      if (groupBy === 'week') {
-        const byWeek = new Map<string, number>();
-        for (const d of rec.byDay) {
-          const weekStart = getWeekStart(d.date);
-          byWeek.set(weekStart, (byWeek.get(weekStart) ?? 0) + d.minutes);
-        }
-        rec.byWeek = Array.from(byWeek.entries()).map(
-          ([weekStart, minutes]) => ({
-            weekStart,
-            minutes,
-          }),
-        );
-        rec.isOverloaded = rec.byWeek.some(
-          (w) => w.minutes > DEFAULT_WEEKLY_MINUTES,
-        );
-      }
+      rec.byPeriod.sort((a, b) => a.date.localeCompare(b.date));
+      rec.byPeriod = rec.byPeriod.map((p) => ({
+        date: p.date,
+        hours: Math.round(p.hours * 10) / 10,
+      }));
+      const sumHours = rec.byPeriod.reduce((acc, p) => acc + p.hours, 0);
+      rec.hours = Math.round(sumHours * 10) / 10;
+      rec.isOverloaded = rec.byPeriod.some(
+        (p) => p.hours > overloadThresholdHours,
+      );
+      totalHours += rec.hours;
     }
 
     return {
       startDate: start.toISOString().split('T')[0],
       endDate: end.toISOString().split('T')[0],
       groupBy,
-      overloadThresholdMinutes: DEFAULT_WEEKLY_MINUTES,
-      byUser: Array.from(byUser.values()),
+      overloadThresholdHours,
+      totalHours: Math.round(totalHours * 10) / 10,
+      entries: Array.from(byUser.values()),
     };
   }
 }
 
-function getWeekStart(dateStr: string): string {
-  const d = new Date(dateStr);
+function getWeekStart(date: Date): string {
+  const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);

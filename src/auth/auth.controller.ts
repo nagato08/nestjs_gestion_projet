@@ -93,13 +93,28 @@ export class AuthController {
     return this.authService.createUserByAdmin(dto);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('users/:id/impact')
+  @ApiOperation({
+    summary:
+      "Impact de la suppression d'un utilisateur (projets, tâches assignées, etc.)",
+  })
+  async getUserImpact(@Param('id') id: string) {
+    return this.authService.getUserImpact(id);
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  async deleteUser(@Param('id') id: string, @Request() req) {
+  async deleteUser(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() body?: { reassignTo?: string },
+  ) {
     if (req.user?.role !== Role.ADMIN) {
       throw new ForbiddenException('Only admins can delete users');
     }
-    return this.authService.deleteUser(id);
+    return this.authService.deleteUser(id, body?.reassignTo);
   }
 
   @Post('request-reset-password')
