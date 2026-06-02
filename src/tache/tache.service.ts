@@ -13,7 +13,7 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
-import { TaskStatus } from '@prisma/client';
+import { Role, TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class TacheService {
@@ -42,6 +42,30 @@ export class TacheService {
   }
 
   /**
+   * UTILITAIRE : Vérifie que l'utilisateur peut gérer ce projet
+   * (ADMIN, ou propriétaire/chef du projet)
+   */
+  private async verifyProjectManagerAccess(
+    projectId: string,
+    userId: string,
+  ): Promise<void> {
+    const [project, user] = await Promise.all([
+      this.prisma.project.findUnique({ where: { id: projectId } }),
+      this.prisma.user.findUnique({ where: { id: userId } }),
+    ]);
+
+    if (!project) throw new NotFoundException('Projet introuvable');
+    if (!user) throw new ForbiddenException('Utilisateur invalide');
+
+    if (user.role === Role.ADMIN) return;
+    if (project.ownerId === userId) return;
+
+    throw new ForbiddenException(
+      'Action réservée au chef de projet ou à un administrateur',
+    );
+  }
+
+  /**
    * UTILITAIRE : Vérifie qu'une tâche existe et que l'utilisateur a accès au projet
    */
   private async verifyTaskAccess(
@@ -67,8 +91,8 @@ export class TacheService {
 
   // 1️⃣ Créer une tâche
   async createTask(userId: string, dto: CreateTaskDto) {
-    // Vérifier l'accès au projet
-    await this.verifyProjectAccess(dto.projectId, userId);
+    // Seul ADMIN ou chef du projet peut créer
+    await this.verifyProjectManagerAccess(dto.projectId, userId);
 
     // Si parentId est fourni, vérifier que la tâche parent existe et appartient au même projet
     if (dto.parentId) {
@@ -424,7 +448,8 @@ export class TacheService {
 
   // 5️⃣ Supprimer une tâche
   async deleteTask(taskId: string, userId: string) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
+    await this.verifyProjectManagerAccess(projectId, userId);
 
     // Vérifier qu'il n'y a pas de sous-tâches
     const task = await this.prisma.task.findUnique({
@@ -453,7 +478,8 @@ export class TacheService {
 
   // 6️⃣ Assigner des utilisateurs à une tâche
   async assignUsersToTask(taskId: string, userId: string, dto: AssignTaskDto) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
+    await this.verifyProjectManagerAccess(projectId, userId);
 
     // Récupérer la tâche pour obtenir le projectId
     const task = await this.prisma.task.findUnique({
@@ -528,7 +554,8 @@ export class TacheService {
     userId: string,
     targetUserId: string,
   ) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
+    await this.verifyProjectManagerAccess(projectId, userId);
 
     const assignment = await this.prisma.taskAssignment.findUnique({
       where: {
@@ -565,8 +592,9 @@ export class TacheService {
     userId: string,
     dto: CreateTaskDependencyDto,
   ) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
     await this.verifyTaskAccess(dto.blockedTaskId, userId);
+    await this.verifyProjectManagerAccess(projectId, userId);
 
     // Récupérer les deux tâches pour vérifier qu'elles appartiennent au même projet
     const [blockingTask, blockedTask] = await Promise.all([
@@ -652,7 +680,8 @@ export class TacheService {
     blockedTaskId: string,
     userId: string,
   ) {
-    await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskAccess(taskId, userId);
+    await this.verifyProjectManagerAccess(projectId, userId);
 
     const dependency = await this.prisma.taskDependency.findFirst({
       where: {

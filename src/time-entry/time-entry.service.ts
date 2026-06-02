@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProjectStatus, TaskStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { StartTimerDto } from './dto/start-timer.dto';
 import { CreateManualTimeEntryDto } from './dto/create-manual-time-entry.dto';
@@ -96,34 +98,85 @@ export class TimeEntryService {
       );
     }
 
-    const timeEntry = await this.prisma.timeEntry.create({
-      data: {
-        taskId: dto.taskId,
-        userId,
-        startTime: new Date(),
-        isManual: false,
-      },
-      include: {
-        task: {
+    // Vérifier que la tâche n'est pas bloquée par une dépendance non terminée
+    const task = await this.prisma.task.findUnique({
+      where: { id: dto.taskId },
+      select: {
+        id: true,
+        status: true,
+        projectId: true,
+        blockedBy: {
           select: {
-            id: true,
-            title: true,
-            project: {
-              select: {
-                id: true,
-                name: true,
+            blockingTask: { select: { id: true, title: true, status: true } },
+          },
+        },
+      },
+    });
+
+    if (!task) {
+      throw new NotFoundException('Tâche introuvable');
+    }
+
+    const unfinishedBlockers = task.blockedBy
+      .map((dep) => dep.blockingTask)
+      .filter((t) => t.status !== TaskStatus.DONE);
+
+    if (unfinishedBlockers.length > 0) {
+      const names = unfinishedBlockers.map((t) => `"${t.title}"`).join(', ');
+      throw new BadRequestException(
+        `Impossible de démarrer cette tâche : elle est bloquée par ${names}. Terminez d'abord ces tâches.`,
+      );
+    }
+
+    const timeEntry = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.timeEntry.create({
+        data: {
+          taskId: dto.taskId,
+          userId,
+          startTime: new Date(),
+          isManual: false,
+        },
+        include: {
+          task: {
+            select: {
+              id: true,
+              title: true,
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
-        },
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
+      });
+
+      // Auto-transition task TODO → DOING
+      if (task.status === TaskStatus.TODO) {
+        await tx.task.update({
+          where: { id: task.id },
+          data: { status: TaskStatus.DOING },
+        });
+      }
+
+      // Auto-transition project PLANNING → ACTIVE
+      await tx.project.updateMany({
+        where: {
+          id: task.projectId,
+          status: ProjectStatus.PLANNING,
+        },
+        data: { status: ProjectStatus.ACTIVE },
+      });
+
+      return created;
     });
 
     return timeEntry;
