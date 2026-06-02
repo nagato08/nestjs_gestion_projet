@@ -159,7 +159,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
     }
   }
 
-  @SubscribeMessage('typing-start')
+  @SubscribeMessage('user:typing')
   async handleTypingStart(
     @MessageBody()
     data: { projectId: string; userId: string; userName: string },
@@ -171,21 +171,19 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
       return;
     }
 
-    // Vérifier que l'utilisateur est membre du projet
     const isMember = await this.verifyProjectMembership(projectId, userId);
     if (!isMember) {
       return;
     }
 
-    // Notifier les autres membres du projet que quelqu'un tape
-    socket.to(`project:${projectId}`).emit('user-typing', {
+    socket.to(`project:${projectId}`).emit('user:typing', {
       projectId,
       userId,
       userName,
     });
   }
 
-  @SubscribeMessage('typing-stop')
+  @SubscribeMessage('user:stopped-typing')
   async handleTypingStop(
     @MessageBody() data: { projectId: string; userId: string },
     @ConnectedSocket() socket: Socket,
@@ -196,14 +194,12 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
       return;
     }
 
-    // Vérifier que l'utilisateur est membre du projet
     const isMember = await this.verifyProjectMembership(projectId, userId);
     if (!isMember) {
       return;
     }
 
-    // Notifier que l'utilisateur a arrêté de taper
-    socket.to(`project:${projectId}`).emit('user-stopped-typing', {
+    socket.to(`project:${projectId}`).emit('user:stopped-typing', {
       projectId,
       userId,
     });
