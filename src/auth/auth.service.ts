@@ -309,7 +309,12 @@ export class AuthService {
         throw new ConflictException("L'utilisateur n'existe pas");
       }
 
-      if (existUser.isResetPasswordRequested === true) {
+      const hasPendingRequest =
+        existUser.isResetPasswordRequested === true &&
+        existUser.resetPasswordTokenExpiresAt !== null &&
+        existUser.resetPasswordTokenExpiresAt > new Date();
+
+      if (hasPendingRequest) {
         throw new ConflictException(
           'Une demande de réinitialisation de mot de passe est déjà en cours',
         );
