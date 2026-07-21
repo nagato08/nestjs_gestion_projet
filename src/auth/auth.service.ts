@@ -373,6 +373,7 @@ export class AuthService {
 
       return {
         error: false,
+        valid: true,
         message:
           'le token est valide, vous pouvez réinitialiser votre mot de passe',
       };
