@@ -52,7 +52,7 @@ export class MailerService {
     token: string;
   }) {
     try {
-      const link = `${this.frontendUrl}/reset-password?token=${token}`;
+      const link = `${this.frontendUrl}/reset-password/${token}`;
       await this.mailer.emails.send({
         from: this.from,
         to: [recipient],
