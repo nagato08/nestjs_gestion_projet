@@ -79,6 +79,31 @@ model User {
   notificationSettings NotificationSettings[]
 
   documentComments DocumentComment[]
+
+  refreshTokens RefreshToken[]
+}
+
+// =========================================================
+// 2.b SESSIONS / REFRESH TOKENS
+// =========================================================
+
+model RefreshToken {
+  id        String @id @default(cuid())
+  // Hash SHA-256 du refresh token (le token en clair n'est jamais stocké)
+  tokenHash String @unique
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  // Contexte de session (pour "déconnexion de tous les appareils")
+  userAgent String?
+  ip        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // =========================================================

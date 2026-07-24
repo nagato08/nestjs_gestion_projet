@@ -21,6 +21,12 @@ import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { Role, Department } from '@prisma/client';
 // import { ForbiddenException } from '@nestjs/common';
 
+// Durée de vie du refresh token (la session « longue »). L'access token, lui, est court (15 min).
+const REFRESH_TTL_DAYS = Number(process.env.JWT_REFRESH_TTL_DAYS ?? 7);
+
+/** Contexte de la session courante, pour tracer les appareils (déconnexion de tous les appareils). */
+export type SessionContext = { userAgent?: string; ip?: string };
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -32,17 +38,21 @@ export class AuthService {
     private cloudinaryService: CloudinaryService,
   ) {}
 
-  async register(createUserDto: CreateUserDto) {
+  async register(createUserDto: CreateUserDto, ctx: SessionContext = {}) {
     const {
       firstName,
       lastName,
       email,
       password,
-      role,
       department,
       jobTitle,
       avatar,
     } = createUserDto;
+
+    // Sécurité : l'inscription publique ne peut JAMAIS créer un ADMIN ou PROJECT_MANAGER.
+    // Le rôle éventuellement envoyé par le client est ignoré. La création de comptes
+    // privilégiés passe exclusivement par createUserByAdmin (route protégée admin).
+    const role = Role.EMPLOYEE;
 
     const existUser = await this.prisma.user.findUnique({
       where: { email },
@@ -116,16 +126,11 @@ export class AuthService {
       firstName,
     });
 
-    // 6️⃣ Génération du JWT
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    // 6️⃣ Émettre l'access token (court) + le refresh token (session révocable)
+    const access_token = await this.signAccessToken(user);
+    const refreshToken = await this.issueRefreshToken(user.id, ctx);
 
-    const access_token = await this.jwtService.signAsync(payload);
-
-    return { access_token, user };
+    return { access_token, refreshToken, user };
   }
 
   async createUserByAdmin(dto: AdminCreateUserDto) {
@@ -200,7 +205,7 @@ export class AuthService {
     return user;
   }
 
-  async login(loginDto: LoginDTO) {
+  async login(loginDto: LoginDTO, ctx: SessionContext = {}) {
     const { email, password } = loginDto;
 
     const user = await this.prisma.user.findUnique({
@@ -216,14 +221,9 @@ export class AuthService {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // 3️⃣ Préparer le payload JWT (on inclut le role pour les guards)
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      department: user.department,
-    };
-    const access_token = await this.jwtService.signAsync(payload);
+    // 3️⃣ Émettre l'access token (court) + le refresh token (session longue, révocable)
+    const access_token = await this.signAccessToken(user);
+    const refreshToken = await this.issueRefreshToken(user.id, ctx);
 
     // 4️⃣ Sélectionner les infos « safe » à renvoyer au frontend
     const safeUser = {
@@ -256,8 +256,98 @@ export class AuthService {
     return {
       user: safeUser,
       access_token,
+      refreshToken,
       dashboardUrl: getDashboardUrl(user.role),
     };
+  }
+
+  // =========================================================
+  // Refresh tokens / sessions
+  // =========================================================
+
+  private signAccessToken(user: {
+    id: string;
+    email: string;
+    role: Role;
+    department: Department;
+  }): Promise<string> {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+    });
+  }
+
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /** Génère un refresh token opaque, en stocke le hash, et retourne le token en clair. */
+  private async issueRefreshToken(
+    userId: string,
+    ctx: SessionContext = {},
+  ): Promise<string> {
+    const token = crypto.randomBytes(48).toString('base64url');
+    const expiresAt = new Date(
+      Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
+    );
+    await this.prisma.refreshToken.create({
+      data: {
+        tokenHash: this.hashToken(token),
+        userId,
+        expiresAt,
+        userAgent: ctx.userAgent ?? null,
+        ip: ctx.ip ?? null,
+      },
+    });
+    return token;
+  }
+
+  /** Vérifie un refresh token, applique la rotation (révoque l'ancien, émet un nouveau). */
+  async refresh(refreshToken: string | undefined, ctx: SessionContext = {}) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token manquant');
+    }
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: this.hashToken(refreshToken) },
+      include: { user: true },
+    });
+    if (
+      !stored ||
+      stored.revokedAt !== null ||
+      stored.expiresAt < new Date() ||
+      stored.user.deletedAt !== null
+    ) {
+      throw new UnauthorizedException('Session expirée. Reconnectez-vous.');
+    }
+
+    // Rotation : l'ancien refresh token est révoqué, un nouveau est émis.
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    });
+    const newRefreshToken = await this.issueRefreshToken(stored.userId, ctx);
+    const access_token = await this.signAccessToken(stored.user);
+    return { access_token, refreshToken: newRefreshToken };
+  }
+
+  /** Déconnexion : révoque le refresh token courant. */
+  async logout(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) return;
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash: this.hashToken(refreshToken), revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /** Déconnexion de tous les appareils : révoque tous les refresh tokens de l'utilisateur. */
+  async logoutAll(userId: string): Promise<{ revoked: number }> {
+    const result = await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { revoked: result.count };
   }
 
   async validateUser(userId: string) {
@@ -496,7 +586,7 @@ export class AuthService {
 
     if (impact.hasImpact && !reassignTo) {
       throw new BadRequestException(
-        "Cet utilisateur a des projets ou tâches assignés. Sélectionnez un utilisateur de remplacement.",
+        'Cet utilisateur a des projets ou tâches assignés. Sélectionnez un utilisateur de remplacement.',
       );
     }
 

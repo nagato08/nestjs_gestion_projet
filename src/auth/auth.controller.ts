@@ -10,11 +10,13 @@ import {
   Post,
   Query,
   Request,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request as ExpressRequest, Response } from 'express';
 import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -28,20 +30,99 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
+const REFRESH_COOKIE = 'refresh_token';
+const REFRESH_TTL_DAYS = Number(process.env.JWT_REFRESH_TTL_DAYS ?? 7);
+const isProd = process.env.NODE_ENV === 'production';
+
+// Cookie httpOnly : invisible au JS (protégé du XSS). SameSite=None + Secure en prod
+// car le front (forge.tadjo.dev) et l'API (api.forge.tadjo.dev) sont sur des sous-domaines.
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? ('none' as const) : ('lax' as const),
+  path: '/auth',
+  maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
+};
+
+function sessionContext(req: ExpressRequest) {
+  return { userAgent: req.headers['user-agent'], ip: req.ip };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Inscrire un utilisateur' })
-  async register(@Body() CreateUserDto: CreateUserDto) {
-    return this.authService.register(CreateUserDto);
+  async register(
+    @Body() dto: CreateUserDto,
+    @Request() req: ExpressRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { refreshToken, ...result } = await this.authService.register(
+      dto,
+      sessionContext(req),
+    );
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    return result;
   }
 
   @Post('login')
   @ApiOperation({ summary: 'Connecter un utilisateur' })
-  async login(@Body() loginDto: LoginDTO) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDTO,
+    @Request() req: ExpressRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { refreshToken, ...result } = await this.authService.login(
+      loginDto,
+      sessionContext(req),
+    );
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    return result;
+  }
+
+  @Post('refresh')
+  @ApiOperation({ summary: 'Renouveler l’access token via le refresh cookie' })
+  async refresh(
+    @Request() req: ExpressRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const current = (req.cookies as Record<string, string> | undefined)?.[
+      REFRESH_COOKIE
+    ];
+    const { access_token, refreshToken } = await this.authService.refresh(
+      current,
+      sessionContext(req),
+    );
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    return { access_token };
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Déconnexion (révoque le refresh token courant)' })
+  async logout(
+    @Request() req: ExpressRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const current = (req.cookies as Record<string, string> | undefined)?.[
+      REFRESH_COOKIE
+    ];
+    await this.authService.logout(current);
+    res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
+    return { success: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  @ApiOperation({ summary: 'Déconnexion de tous les appareils' })
+  async logoutAll(
+    @Request() req: ExpressRequest & { user: { sub: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.logoutAll(req.user.sub);
+    res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)

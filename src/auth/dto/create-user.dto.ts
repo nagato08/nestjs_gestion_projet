@@ -55,16 +55,18 @@ export class CreateUserDto {
   // Rôle & département
   // ---------------------------
 
-  @IsNotEmpty({ message: 'Le rôle est requis' })
+  // Note sécurité : ce champ est ignoré par l'inscription publique (toujours EMPLOYEE).
+  // Conservé optionnel pour compatibilité ; la création de comptes privilégiés passe par /auth/users (admin).
+  @IsOptional()
   @IsEnum(Role, {
     message: 'Rôle invalide (ADMIN, PROJECT_MANAGER ou EMPLOYEE)',
   })
   @ApiProperty({
     enum: Role,
-    example: Role.EMPLOYEE,
-    description: 'The role assigned by the admin',
+    required: false,
+    description: 'Ignoré à l’inscription publique (toujours EMPLOYEE).',
   })
-  role!: Role;
+  role?: Role;
 
   @IsNotEmpty({ message: 'Le département est requis' })
   @IsEnum(Department, {
