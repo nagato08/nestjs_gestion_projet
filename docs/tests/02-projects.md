@@ -7,8 +7,36 @@ CRUD projets, membres, code d’invitation, token d’invitation, régénératio
 ## Prérequis
 
 - **JWT** pour toutes les routes.
-- **ADMIN** ou **PROJECT_MANAGER** pour créer un projet.
-- **Owner du projet** pour : mise à jour, ajout/retrait de membres, régénération token, suppression.
+- **ADMIN** ou **PROJECT_MANAGER** (rôle global) pour créer un projet.
+- Le reste des permissions dépend du **rôle projet**, pas du rôle global.
+
+---
+
+## Rôles projet (RBAC fin)
+
+Chaque membre porte un rôle dans le projet, indépendant de son rôle global.
+Hiérarchie : `OWNER` > `ADMIN` > `MEMBER` > `VIEWER`. Un rôle hérite de tout
+ce qu'autorisent les rôles inférieurs.
+
+| Action                                            | Rôle minimum |
+| ------------------------------------------------- | ------------ |
+| Consulter projet, tâches, planning, docs, chat    | `VIEWER`     |
+| Créer/modifier tâches assignées, commenter, poster dans le chat, déposer un document, saisir du temps | `MEMBER` |
+| Créer/supprimer des tâches, assigner, gérer les dépendances | `ADMIN` |
+| Ajouter/retirer des membres, changer leur rôle, modifier le projet, régénérer le token | `ADMIN` |
+| Supprimer le projet, transférer la propriété      | `OWNER`      |
+
+Deux règles complémentaires :
+
+- Le propriétaire du projet est toujours traité comme `OWNER`.
+- Un **ADMIN global** est traité comme `OWNER` sur tous les projets.
+
+Garde-fous anti-escalade : on ne peut ni attribuer un rôle supérieur ou égal au
+sien, ni agir sur un membre de rang supérieur ou égal, ni modifier son propre rôle.
+`OWNER` ne s'attribue pas : il passe par le transfert de propriété.
+
+Les réponses `GET /projects/my-projects` et `GET /projects/:id` exposent `myRole`,
+pour que le front masque les actions interdites.
 
 ---
 
@@ -104,15 +132,16 @@ curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID \
 
 ---
 
-### 5. Ajouter un membre (owner)
+### 5. Ajouter un membre (ADMIN projet)
 
 | Élément | Valeur                  |
 | ------- | ----------------------- |
 | Méthode | `POST`                  |
 | URL     | `/projects/:id/members` |
-| Auth    | Oui + **owner**         |
+| Auth    | Oui + **ADMIN projet**  |
 
-**Body (JSON)** : `userId` (id de l’utilisateur à ajouter).
+**Body (JSON)** : `userId` (id de l’utilisateur à ajouter), `role` optionnel
+(`ADMIN`, `MEMBER` par défaut, `VIEWER`).
 
 **Exemple curl :**
 
@@ -120,20 +149,22 @@ curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID \
 curl -s -X POST http://localhost:4000/projects/PROJECT_ID/members \
   -H "Authorization: Bearer VOTRE_JWT" \
   -H "Content-Type: application/json" \
-  -d '{"userId": "USER_ID_A_AJOUTER"}'
+  -d '{"userId": "USER_ID_A_AJOUTER", "role": "VIEWER"}'
 ```
 
-**À vérifier :** Membre ajouté. 403 si non-owner.
+**À vérifier :** Membre ajouté avec le rôle demandé. 403 si `MEMBER`/`VIEWER`.
+403 aussi si `role: "OWNER"` (passer par le transfert de propriété) ou si un
+`ADMIN` projet tente d'attribuer `ADMIN`.
 
 ---
 
-### 6. Retirer un membre (owner)
+### 6. Retirer un membre (ADMIN projet)
 
 | Élément | Valeur                  |
 | ------- | ----------------------- |
 | Méthode | `DELETE`                |
 | URL     | `/projects/:id/members` |
-| Auth    | Oui + **owner**         |
+| Auth    | Oui + **ADMIN projet**  |
 
 **Body (JSON)** : `userId` (id du membre à retirer).
 
@@ -146,7 +177,56 @@ curl -s -X DELETE http://localhost:4000/projects/PROJECT_ID/members \
   -d '{"userId": "USER_ID_A_RETIRER"}'
 ```
 
-**À vérifier :** Membre retiré. 403 si non-owner.
+**À vérifier :** Membre retiré. 403 si `MEMBER`/`VIEWER`, si la cible est
+`OWNER`, ou si un `ADMIN` projet vise un autre `ADMIN`.
+
+---
+
+### 6 bis. Changer le rôle d’un membre (ADMIN projet)
+
+| Élément | Valeur                       |
+| ------- | ---------------------------- |
+| Méthode | `PATCH`                      |
+| URL     | `/projects/:id/members/role` |
+| Auth    | Oui + **ADMIN projet**       |
+
+**Body (JSON)** : `userId`, `role` (`ADMIN`, `MEMBER` ou `VIEWER`).
+
+**Exemple curl :**
+
+```bash
+curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID/members/role \
+  -H "Authorization: Bearer VOTRE_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "USER_ID", "role": "VIEWER"}'
+```
+
+**À vérifier :** Rôle mis à jour. 403 sur son propre rôle, sur un `OWNER`,
+sur `role: "OWNER"`, ou en cas d'escalade (attribuer un rôle ≥ au sien).
+
+---
+
+### 6 ter. Transférer la propriété (OWNER)
+
+| Élément | Valeur                             |
+| ------- | ---------------------------------- |
+| Méthode | `PATCH`                            |
+| URL     | `/projects/:id/transfer-ownership` |
+| Auth    | Oui + **OWNER**                    |
+
+**Body (JSON)** : `newOwnerId` (doit déjà être membre du projet).
+
+**Exemple curl :**
+
+```bash
+curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID/transfer-ownership \
+  -H "Authorization: Bearer VOTRE_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"newOwnerId": "USER_ID"}'
+```
+
+**À vérifier :** `ownerId` du projet mis à jour, le nouveau propriétaire passe
+`OWNER`, l'ancien est rétrogradé `ADMIN`. 404 si la cible n'est pas membre.
 
 ---
 

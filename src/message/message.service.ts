@@ -8,12 +8,14 @@ import {
 import { PrismaService } from 'src/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SocketService } from 'src/socket/socket.service';
+import { ProjectAccessService } from 'src/common/access/project-access.service';
 
 @Injectable()
 export class MessageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   /**
@@ -23,19 +25,17 @@ export class MessageService {
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
+    await this.projectAccess.requireMember(projectId, userId);
+  }
 
-    if (!project) {
-      throw new NotFoundException('Projet introuvable');
-    }
-
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
-    }
+  /**
+   * UTILITAIRE : Publier un message exige MEMBER minimum (un VIEWER ne poste pas).
+   */
+  private async verifyProjectContributorAccess(
+    projectId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.projectAccess.requireContributor(projectId, userId);
   }
 
   // 1️⃣ Créer un message dans un projet
@@ -44,7 +44,7 @@ export class MessageService {
     userId: string,
     dto: CreateMessageDto,
   ) {
-    await this.verifyProjectAccess(projectId, userId);
+    await this.verifyProjectContributorAccess(projectId, userId);
 
     const message = await this.prisma.message.create({
       data: {
@@ -148,11 +148,6 @@ export class MessageService {
           select: {
             id: true,
             name: true,
-            members: {
-              select: {
-                userId: true,
-              },
-            },
           },
         },
       },
@@ -163,10 +158,7 @@ export class MessageService {
     }
 
     // Vérifier l'accès
-    const isMember = message.project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce message");
-    }
+    await this.verifyProjectAccess(message.projectId, userId);
 
     return message;
   }

@@ -18,6 +18,7 @@ import { NotificationSettingsModule } from './notification-settings/notification
 import { PlanningModule } from './planning/planning.module';
 import { PrismaService } from './prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { AccessModule } from './common/access/access.module';
 import { AiModule } from './ai/ai.module';
 import { HealthController } from './health/health.controller';
 
@@ -28,6 +29,7 @@ import { HealthController } from './health/health.controller';
       { name: 'medium', ttl: 10_000, limit: 100 },
       { name: 'long', ttl: 60_000, limit: 300 },
     ]),
+    AccessModule,
     AuthModule,
     ChatModule,
     SocketModule,

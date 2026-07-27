@@ -1,35 +1,32 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { SocketService } from 'src/socket/socket.service';
+import { ProjectAccessService } from 'src/common/access/project-access.service';
 
 @Injectable()
 export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
+  /** Lecture du chat : tout membre du projet, VIEWER compris. */
   private async ensureProjectMember(
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
-    if (!project) throw new NotFoundException('Projet introuvable');
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException(
-        "Vous n'êtes pas membre de ce projet. Seuls les membres peuvent discuter dans le chat du projet.",
-      );
-    }
+    await this.projectAccess.requireMember(projectId, userId);
+  }
+
+  /** Écriture dans le chat : MEMBER minimum, un VIEWER ne peut pas poster. */
+  private async ensureProjectContributor(
+    projectId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.projectAccess.requireContributor(projectId, userId);
   }
 
   /**
@@ -45,7 +42,7 @@ export class ChatService {
     content: string;
     senderId: string;
   }) {
-    await this.ensureProjectMember(projectId, senderId);
+    await this.ensureProjectContributor(projectId, senderId);
 
     let conversation = await this.prisma.conversation.findUnique({
       where: { projectId },

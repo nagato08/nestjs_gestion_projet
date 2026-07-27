@@ -16,6 +16,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { RemoveProjectMemberDto } from './dto/remove-project-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
@@ -50,9 +51,11 @@ export class ProjectController {
     return this.projectService.getProjectById(id, req.user.id);
   }
 
-  // 4. LE SERVICE VÉRIFIERA SI L'USER EST OWNER
+  // 4. LE SERVICE VÉRIFIE LE RÔLE PROJET (ADMIN projet minimum)
   @Patch(':id')
-  @ApiOperation({ summary: 'Mettre à jour un projet (Owner uniquement)' })
+  @ApiOperation({
+    summary: 'Mettre à jour un projet (propriétaire ou administrateur projet)',
+  })
   update(
     @Param('id') id: string,
     @Req() req: any,
@@ -62,7 +65,9 @@ export class ProjectController {
   }
 
   @Post(':id/members')
-  @ApiOperation({ summary: 'Ajouter un membre (Owner uniquement)' })
+  @ApiOperation({
+    summary: 'Ajouter un membre (propriétaire ou administrateur du projet)',
+  })
   addMember(
     @Param('id') id: string,
     @Req() req: any,
@@ -72,7 +77,9 @@ export class ProjectController {
   }
 
   @Delete(':id/members')
-  @ApiOperation({ summary: 'Retirer un membre (Owner uniquement)' })
+  @ApiOperation({
+    summary: 'Retirer un membre (propriétaire ou administrateur du projet)',
+  })
   removeMember(
     @Param('id') id: string,
     @Req() req: any,
@@ -83,6 +90,36 @@ export class ProjectController {
       req.user.id,
       removeProjectMemberDto,
     );
+  }
+
+  @Patch(':id/members/role')
+  @ApiOperation({
+    summary:
+      'Changer le rôle projet d’un membre (propriétaire ou administrateur du projet)',
+  })
+  updateMemberRole(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() updateMemberRoleDto: UpdateMemberRoleDto,
+  ) {
+    return this.projectService.updateMemberRole(
+      id,
+      req.user.id,
+      updateMemberRoleDto,
+    );
+  }
+
+  @Patch(':id/transfer-ownership')
+  @ApiOperation({
+    summary:
+      'Transférer la propriété du projet à un autre membre (Owner uniquement)',
+  })
+  transferOwnership(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body('newOwnerId') newOwnerId: string,
+  ) {
+    return this.projectService.transferOwnership(id, req.user.id, newOwnerId);
   }
 
   // 5. TOUT LE MONDE PEUT REJOINDRE

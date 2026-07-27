@@ -12,6 +12,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { SocketService } from './socket/socket.service';
 import { PrismaService } from './prisma.service';
+import { ProjectAccessService } from './common/access/project-access.service';
 
 @Global()
 @WebSocketGateway({
@@ -27,6 +28,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   constructor(
     private socketService: SocketService,
     private prisma: PrismaService,
+    private projectAccess: ProjectAccessService,
   ) {}
 
   afterInit() {
@@ -38,22 +40,22 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   }
 
   /**
-   * UTILITAIRE : Vérifie que l'utilisateur est membre du projet
+   * UTILITAIRE : Vérifie que l'utilisateur a accès au projet.
+   *
+   * Renvoie un booléen plutôt qu'une exception : côté WebSocket on répond par
+   * un événement `error`, pas par un code HTTP.
    */
   private async verifyProjectMembership(
     projectId: string,
     userId: string,
   ): Promise<boolean> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
-
-    if (!project) {
+    try {
+      const role = await this.projectAccess.getEffectiveRole(projectId, userId);
+      return role !== null;
+    } catch {
+      // Projet introuvable ou supprimé.
       return false;
     }
-
-    return project.members.some((m) => m.userId === userId);
   }
 
   @SubscribeMessage('test')

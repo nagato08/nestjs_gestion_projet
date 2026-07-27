@@ -8,8 +8,12 @@ import { PrismaService } from 'src/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateDocumentCommentDto } from './dto/create-document-comment.dto';
-import { Role } from '@prisma/client';
+import { ProjectRole } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary.service';
+import {
+  PROJECT_ROLE_RANK,
+  ProjectAccessService,
+} from 'src/common/access/project-access.service';
 
 // Type pour les fichiers uploadés via Multer
 type MulterFile = {
@@ -29,28 +33,27 @@ export class DocumentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   /**
-   * UTILITAIRE : Vérifie que l'utilisateur est membre du projet
+   * UTILITAIRE : Consultation du projet — tout membre, VIEWER compris.
    */
   private async verifyProjectAccess(
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
+    await this.projectAccess.requireMember(projectId, userId);
+  }
 
-    if (!project) {
-      throw new NotFoundException('Projet introuvable');
-    }
-
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
-    }
+  /**
+   * UTILITAIRE : Dépôt / modification de documents — MEMBER minimum.
+   */
+  private async verifyProjectContributorAccess(
+    projectId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.projectAccess.requireContributor(projectId, userId);
   }
 
   /**
@@ -62,31 +65,22 @@ export class DocumentService {
   ): Promise<{ id: string; projectId: string; uploadedBy: string }> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
-      include: {
-        project: {
-          include: { members: true },
-        },
-      },
+      select: { id: true, projectId: true, uploadedBy: true },
     });
 
     if (!document) {
       throw new NotFoundException('Document introuvable');
     }
 
-    const isMember = document.project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce document");
-    }
+    await this.projectAccess.requireMember(document.projectId, userId);
 
-    return {
-      id: document.id,
-      projectId: document.projectId,
-      uploadedBy: document.uploadedBy,
-    };
+    return document;
   }
 
   /**
-   * UTILITAIRE : Vérifie les permissions de modification/suppression
+   * UTILITAIRE : Vérifie les permissions de modification/suppression.
+   * Peuvent modifier : l'auteur du document (s'il est encore contributeur)
+   * et les gestionnaires du projet (propriétaire, ADMIN projet, ADMIN global).
    */
   private async canModifyDocument(
     documentId: string,
@@ -94,43 +88,34 @@ export class DocumentService {
   ): Promise<boolean> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
-      include: {
-        project: {
-          include: {
-            owner: true,
-            members: true,
-          },
-        },
-        author: true,
-      },
+      select: { projectId: true, uploadedBy: true },
     });
 
     if (!document) {
       return false;
     }
 
-    // L'auteur peut modifier
-    if (document.uploadedBy === userId) {
+    const role = await this.projectAccess.getEffectiveRole(
+      document.projectId,
+      userId,
+    );
+    if (!role) return false;
+
+    // Un gestionnaire du projet peut toujours modifier.
+    if (PROJECT_ROLE_RANK[role] >= PROJECT_ROLE_RANK[ProjectRole.ADMIN]) {
       return true;
     }
 
-    // Le propriétaire du projet peut modifier
-    if (document.project.ownerId === userId) {
-      return true;
-    }
-
-    // Les admins peuvent modifier
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-
-    return user?.role === Role.ADMIN;
+    // L'auteur peut modifier son document tant qu'il n'est pas rétrogradé VIEWER.
+    return (
+      document.uploadedBy === userId &&
+      PROJECT_ROLE_RANK[role] >= PROJECT_ROLE_RANK[ProjectRole.MEMBER]
+    );
   }
 
   // 1️⃣ Créer un document (sans fichier, juste le métadonnées)
   async createDocument(userId: string, dto: CreateDocumentDto) {
-    await this.verifyProjectAccess(dto.projectId, userId);
+    await this.verifyProjectContributorAccess(dto.projectId, userId);
 
     const document = await this.prisma.document.create({
       data: {
@@ -171,7 +156,9 @@ export class DocumentService {
     userId: string,
     file: MulterFile,
   ) {
-    await this.verifyDocumentAccess(documentId, userId);
+    const { projectId } = await this.verifyDocumentAccess(documentId, userId);
+    // Déposer une version est une écriture : VIEWER exclu.
+    await this.verifyProjectContributorAccess(projectId, userId);
 
     // Récupérer le document pour obtenir le numéro de version actuel
     const document = await this.prisma.document.findUnique({
@@ -433,7 +420,9 @@ export class DocumentService {
     userId: string,
     dto: CreateDocumentCommentDto,
   ) {
-    await this.verifyDocumentAccess(documentId, userId);
+    const { projectId } = await this.verifyDocumentAccess(documentId, userId);
+    // Commenter est une écriture : VIEWER exclu.
+    await this.verifyProjectContributorAccess(projectId, userId);
 
     const comment = await this.prisma.documentComment.create({
       data: {
@@ -467,14 +456,9 @@ export class DocumentService {
   async deleteDocumentComment(commentId: string, userId: string) {
     const comment = await this.prisma.documentComment.findUnique({
       where: { id: commentId },
-      include: {
-        document: {
-          include: {
-            project: {
-              include: { members: true },
-            },
-          },
-        },
+      select: {
+        userId: true,
+        document: { select: { projectId: true } },
       },
     });
 
@@ -483,12 +467,10 @@ export class DocumentService {
     }
 
     // Vérifier l'accès au document
-    const isMember = comment.document.project.members.some(
-      (m) => m.userId === userId,
+    await this.verifyProjectContributorAccess(
+      comment.document.projectId,
+      userId,
     );
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce commentaire");
-    }
 
     // Seul l'auteur peut supprimer son commentaire
     if (comment.userId !== userId) {

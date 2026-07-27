@@ -7,14 +7,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectStatus, TaskStatus } from '@prisma/client';
+import { ProjectRole, ProjectStatus, TaskStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { StartTimerDto } from './dto/start-timer.dto';
 import { CreateManualTimeEntryDto } from './dto/create-manual-time-entry.dto';
+import { ProjectAccessService } from 'src/common/access/project-access.service';
 
 @Injectable()
 export class TimeEntryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   /**
    * UTILITAIRE : Vérifie qu'une tâche existe et que l'utilisateur a accès
@@ -23,23 +27,12 @@ export class TimeEntryService {
     taskId: string,
     userId: string,
   ): Promise<void> {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        project: {
-          include: { members: true },
-        },
-      },
-    });
-
-    if (!task) {
-      throw new NotFoundException('Tâche introuvable');
-    }
-
-    const isMember = task.project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à cette tâche");
-    }
+    // Saisir du temps est une écriture : MEMBER minimum, VIEWER exclu.
+    await this.projectAccess.requireTaskRole(
+      taskId,
+      userId,
+      ProjectRole.MEMBER,
+    );
   }
 
   /**
@@ -454,20 +447,13 @@ export class TimeEntryService {
 
   // 7️⃣ Récupérer les statistiques de temps pour un projet
   async getProjectTimeStats(projectId: string, userId: string) {
-    // Vérifier l'accès au projet
-    const project = await this.prisma.project.findUnique({
+    // Consultation des statistiques : tout membre, VIEWER compris.
+    await this.projectAccess.requireMember(projectId, userId);
+
+    const project = await this.prisma.project.findUniqueOrThrow({
       where: { id: projectId },
-      include: { members: true },
+      select: { id: true, name: true },
     });
-
-    if (!project) {
-      throw new NotFoundException('Projet introuvable');
-    }
-
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
-    }
 
     const timeEntries = await this.prisma.timeEntry.findMany({
       where: {

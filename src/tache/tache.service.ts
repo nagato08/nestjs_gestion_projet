@@ -13,56 +13,35 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
-import { ProjectStatus, Role, TaskStatus } from '@prisma/client';
+import { ProjectRole, ProjectStatus, TaskStatus } from '@prisma/client';
+import { ProjectAccessService } from 'src/common/access/project-access.service';
 
 @Injectable()
 export class TacheService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   /**
-   * UTILITAIRE : Vérifie que l'utilisateur est membre du projet
+   * UTILITAIRE : Lecture du projet — tout membre, y compris VIEWER.
    */
   private async verifyProjectAccess(
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Projet introuvable');
-    }
-
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
-    }
+    await this.projectAccess.requireMember(projectId, userId);
   }
 
   /**
-   * UTILITAIRE : Vérifie que l'utilisateur peut gérer ce projet
-   * (ADMIN, ou propriétaire/chef du projet)
+   * UTILITAIRE : Gestion du projet — ADMIN projet minimum
+   * (propriétaire, administrateur du projet, ou ADMIN global).
    */
   private async verifyProjectManagerAccess(
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const [project, user] = await Promise.all([
-      this.prisma.project.findUnique({ where: { id: projectId } }),
-      this.prisma.user.findUnique({ where: { id: userId } }),
-    ]);
-
-    if (!project) throw new NotFoundException('Projet introuvable');
-    if (!user) throw new ForbiddenException('Utilisateur invalide');
-
-    if (user.role === Role.ADMIN) return;
-    if (project.ownerId === userId) return;
-
-    throw new ForbiddenException(
-      'Action réservée au chef de projet ou à un administrateur',
-    );
+    await this.projectAccess.requireManager(projectId, userId);
   }
 
   /**
@@ -72,21 +51,27 @@ export class TacheService {
     taskId: string,
     userId: string,
   ): Promise<{ id: string; projectId: string }> {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      include: { project: { include: { members: true } } },
-    });
+    const { id, projectId } = await this.projectAccess.requireTaskRole(
+      taskId,
+      userId,
+      ProjectRole.VIEWER,
+    );
+    return { id, projectId };
+  }
 
-    if (!task) {
-      throw new NotFoundException('Tâche introuvable');
-    }
-
-    const isMember = task.project.members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à cette tâche");
-    }
-
-    return { id: task.id, projectId: task.projectId };
+  /**
+   * UTILITAIRE : Modification d'une tâche — MEMBER minimum.
+   */
+  private async verifyTaskContributorAccess(
+    taskId: string,
+    userId: string,
+  ): Promise<{ id: string; projectId: string }> {
+    const { id, projectId } = await this.projectAccess.requireTaskRole(
+      taskId,
+      userId,
+      ProjectRole.MEMBER,
+    );
+    return { id, projectId };
   }
 
   // 1️⃣ Créer une tâche
@@ -389,7 +374,7 @@ export class TacheService {
 
   // 4️⃣ Mettre à jour une tâche
   async updateTask(taskId: string, userId: string, dto: UpdateTaskDto) {
-    await this.verifyTaskAccess(taskId, userId);
+    await this.verifyTaskContributorAccess(taskId, userId);
 
     const updateData: any = {};
     if (dto.title !== undefined) updateData.title = dto.title;
@@ -705,7 +690,7 @@ export class TacheService {
 
   // 🔟 Créer un commentaire sur une tâche
   async createComment(taskId: string, userId: string, dto: CreateCommentDto) {
-    await this.verifyTaskAccess(taskId, userId);
+    await this.verifyTaskContributorAccess(taskId, userId);
 
     const comment = await this.prisma.comment.create({
       data: {
@@ -741,7 +726,7 @@ export class TacheService {
     }
 
     // Vérifier l'accès à la tâche
-    await this.verifyTaskAccess(comment.taskId, userId);
+    await this.verifyTaskContributorAccess(comment.taskId, userId);
 
     // Seul l'auteur peut supprimer son commentaire
     if (comment.userId !== userId) {
@@ -765,7 +750,10 @@ export class TacheService {
     userId: string,
     dto: ChangeTaskStatusDto,
   ) {
-    const { projectId } = await this.verifyTaskAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskContributorAccess(
+      taskId,
+      userId,
+    );
 
     // Si on passe en DOING : vérifier que les bloqueurs sont terminés
     if (dto.status === TaskStatus.DOING) {

@@ -1,9 +1,6 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { ProjectAccessService } from 'src/common/access/project-access.service';
 import { TaskStatus } from '@prisma/client';
 
 /**
@@ -11,20 +8,17 @@ import { TaskStatus } from '@prisma/client';
  */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   private async ensureProjectAccess(
     projectId: string,
     userId: string,
   ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
-    if (!project) throw new NotFoundException('Projet introuvable');
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember)
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
+    // Lecture seule : tout membre du projet, y compris VIEWER.
+    await this.projectAccess.requireMember(projectId, userId);
   }
 
   /**

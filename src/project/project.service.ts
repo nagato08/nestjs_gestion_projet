@@ -12,32 +12,19 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { RemoveProjectMemberDto } from './dto/remove-project-member.dto';
 import { randomUUID } from 'crypto';
-import { Project, ProjectMember, Role } from '@prisma/client';
+import { Project, ProjectMember, ProjectRole } from '@prisma/client';
+import {
+  PROJECT_ROLE_RANK,
+  ProjectAccessService,
+} from 'src/common/access/project-access.service';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 
 @Injectable()
 export class ProjectService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  /**
-   * UTILITAIRE : Vérifie l'existence d'un projet et si l'utilisateur en est l'owner.
-   */
-  private async getProjectIfOwner(
-    projectId: string,
-    userId: string,
-  ): Promise<Project> {
-    const project = await this.prisma.project.findFirst({
-      where: {
-        id: projectId,
-        deletedAt: null, // ✅ Exclure les projets supprimés
-      },
-    });
-
-    if (!project) throw new NotFoundException('Projet introuvable');
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('Action réservée au propriétaire du projet');
-    }
-    return project;
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   // 1️⃣ Créer un projet (Transactionnel : Projet + Premier Membre)
   async createProject(
@@ -107,14 +94,24 @@ export class ProjectService {
       doneCounts.map((d) => [d.projectId, d._count._all]),
     );
 
+    // Rôles résolus en une requête groupée plutôt qu'un appel par projet.
+    const roles = await this.projectAccess.getRolesForProjects(
+      projects.map((p) => p.id),
+      userId,
+    );
+
     return projects.map((p) => ({
       ...p,
       completedTasksCount: doneMap.get(p.id) ?? 0,
+      myRole: roles.get(p.id) ?? null,
     }));
   }
 
   // 3️⃣ Récupérer un projet par ID avec vérification d'accès
   async getProjectById(projectId: string, userId: string) {
+    // VIEWER suffit pour consulter ; lève NotFound/Forbidden le cas échéant.
+    const myRole = await this.projectAccess.requireMember(projectId, userId);
+
     const project = await this.prisma.project.findFirst({
       where: {
         id: projectId,
@@ -143,24 +140,21 @@ export class ProjectService {
 
     if (!project) throw new NotFoundException('Projet introuvable');
 
-    const isMember = project.members.some((m) => m.userId === userId);
-    if (!isMember)
-      throw new ForbiddenException("Vous n'avez pas accès à ce projet");
-
     const completedTasksCount = await this.prisma.task.count({
       where: { projectId, status: 'DONE' },
     });
 
-    return { ...project, completedTasksCount };
+    // `myRole` permet au front de masquer les actions interdites sans rejouer la règle.
+    return { ...project, completedTasksCount, myRole };
   }
 
-  // 4️⃣ Mettre à jour (Utilise l'utilitaire privé)
+  // 4️⃣ Mettre à jour (propriétaire ou administrateur du projet)
   async updateProject(
     projectId: string,
     userId: string,
     dto: UpdateProjectDto,
   ) {
-    await this.getProjectIfOwner(projectId, userId);
+    await this.projectAccess.requireManager(projectId, userId);
 
     // Préparer les données avec conversion des dates
     const updateData: any = {};
@@ -186,6 +180,7 @@ export class ProjectService {
   private async addMemberToProject(
     projectId: string,
     userId: string,
+    role: ProjectRole = ProjectRole.MEMBER,
   ): Promise<ProjectMember> {
     const existingMember = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId } },
@@ -195,17 +190,31 @@ export class ProjectService {
       throw new ConflictException('L’utilisateur est déjà membre du projet');
 
     return this.prisma.projectMember.create({
-      data: { projectId, userId },
+      data: { projectId, userId, role },
     });
   }
 
   async addMember(
     projectId: string,
-    ownerId: string,
+    actorId: string,
     dto: AddProjectMemberDto,
   ) {
-    await this.getProjectIfOwner(projectId, ownerId);
-    return this.addMemberToProject(projectId, dto.userId);
+    const actorRole = await this.projectAccess.requireManager(
+      projectId,
+      actorId,
+    );
+    const role = dto.role ?? ProjectRole.MEMBER;
+
+    // On ne crée pas un second propriétaire : la propriété se transfère.
+    if (role === ProjectRole.OWNER) {
+      throw new ForbiddenException(
+        'Utiliser le transfert de propriété pour désigner un nouveau propriétaire',
+      );
+    }
+    // Un ADMIN projet ne peut pas nommer quelqu'un à son propre niveau.
+    this.assertCanAssignRole(actorRole, role);
+
+    return this.addMemberToProject(projectId, dto.userId, role);
   }
 
   async joinByProjectCode(projectCode: string, userId: string) {
@@ -233,25 +242,154 @@ export class ProjectService {
   // 6️⃣ Retirer un membre
   async removeMember(
     projectId: string,
-    ownerId: string,
+    actorId: string,
     dto: RemoveProjectMemberDto,
   ) {
-    await this.getProjectIfOwner(projectId, ownerId);
+    const actorRole = await this.projectAccess.requireManager(
+      projectId,
+      actorId,
+    );
 
-    if (ownerId === dto.userId) {
+    if (actorId === dto.userId) {
       throw new ForbiddenException(
-        'Le propriétaire ne peut pas se retirer lui-même',
+        'Un gestionnaire ne peut pas se retirer lui-même du projet',
       );
     }
+
+    const target = await this.getMembershipOrThrow(projectId, dto.userId);
+
+    // On ne retire jamais le propriétaire, et un ADMIN ne peut pas
+    // évincer un autre ADMIN — seul le propriétaire le peut.
+    if (target.role === ProjectRole.OWNER) {
+      throw new ForbiddenException(
+        'Le propriétaire du projet ne peut pas être retiré',
+      );
+    }
+    this.assertOutranks(actorRole, target.role);
 
     return this.prisma.projectMember.delete({
       where: { projectId_userId: { projectId, userId: dto.userId } },
     });
   }
 
+  /**
+   * Change le rôle d'un membre existant.
+   * Réservé aux gestionnaires ; le passage à OWNER se fait par transfert.
+   */
+  async updateMemberRole(
+    projectId: string,
+    actorId: string,
+    dto: UpdateMemberRoleDto,
+  ) {
+    const actorRole = await this.projectAccess.requireManager(
+      projectId,
+      actorId,
+    );
+
+    if (actorId === dto.userId) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas modifier votre propre rôle',
+      );
+    }
+    if (dto.role === ProjectRole.OWNER) {
+      throw new ForbiddenException(
+        'Utiliser le transfert de propriété pour désigner un nouveau propriétaire',
+      );
+    }
+
+    const target = await this.getMembershipOrThrow(projectId, dto.userId);
+    if (target.role === ProjectRole.OWNER) {
+      throw new ForbiddenException(
+        'Le rôle du propriétaire ne peut pas être modifié',
+      );
+    }
+
+    // Il faut dominer à la fois le rôle actuel de la cible et celui qu'on lui donne.
+    this.assertOutranks(actorRole, target.role);
+    this.assertCanAssignRole(actorRole, dto.role);
+
+    return this.prisma.projectMember.update({
+      where: { projectId_userId: { projectId, userId: dto.userId } },
+      data: { role: dto.role },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, avatar: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Transfère la propriété du projet à un autre membre.
+   * L'ancien propriétaire est rétrogradé ADMIN pour ne pas perdre la main.
+   */
+  async transferOwnership(
+    projectId: string,
+    actorId: string,
+    newOwnerId: string,
+  ) {
+    await this.projectAccess.requireOwner(projectId, actorId);
+
+    if (actorId === newOwnerId) {
+      throw new ConflictException('Vous êtes déjà propriétaire de ce projet');
+    }
+
+    await this.getMembershipOrThrow(projectId, newOwnerId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.update({
+        where: { id: projectId },
+        data: { ownerId: newOwnerId },
+      });
+
+      await tx.projectMember.update({
+        where: { projectId_userId: { projectId, userId: newOwnerId } },
+        data: { role: ProjectRole.OWNER },
+      });
+
+      await tx.projectMember.update({
+        where: { projectId_userId: { projectId, userId: actorId } },
+        data: { role: ProjectRole.ADMIN },
+      });
+
+      return project;
+    });
+  }
+
+  /** Récupère l'appartenance d'un utilisateur au projet, ou lève NotFound. */
+  private async getMembershipOrThrow(projectId: string, userId: string) {
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
+    });
+
+    if (!membership) {
+      throw new NotFoundException("L'utilisateur n'est pas membre du projet");
+    }
+    return membership;
+  }
+
+  /** L'acteur doit être strictement au-dessus de sa cible. */
+  private assertOutranks(actorRole: ProjectRole, targetRole: ProjectRole) {
+    if (PROJECT_ROLE_RANK[actorRole] <= PROJECT_ROLE_RANK[targetRole]) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas agir sur un membre de rang égal ou supérieur au vôtre',
+      );
+    }
+  }
+
+  /** On n'attribue jamais un rôle supérieur ou égal au sien. */
+  private assertCanAssignRole(actorRole: ProjectRole, targetRole: ProjectRole) {
+    if (PROJECT_ROLE_RANK[targetRole] >= PROJECT_ROLE_RANK[actorRole]) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas attribuer un rôle supérieur ou égal au vôtre',
+      );
+    }
+  }
+
   // 9️⃣ Régénérer le token
   async regenerateInviteToken(projectId: string, userId: string) {
-    await this.getProjectIfOwner(projectId, userId);
+    await this.projectAccess.requireManager(projectId, userId);
     return this.prisma.project.update({
       where: { id: projectId },
       data: { inviteToken: randomUUID() },
@@ -260,32 +398,8 @@ export class ProjectService {
 
   // 🔟 Supprimer un projet (soft delete)
   async deleteProject(projectId: string, userId: string) {
-    // Vérifier que le projet existe et n'est pas déjà supprimé
-    const project = await this.prisma.project.findFirst({
-      where: {
-        id: projectId,
-        deletedAt: null,
-      },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Projet introuvable ou déjà supprimé');
-    }
-
-    // Vérifier les permissions : seul le propriétaire ou un admin peut supprimer
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-
-    const isOwner = project.ownerId === userId;
-    const isAdmin = user?.role === Role.ADMIN;
-
-    if (!isOwner && !isAdmin) {
-      throw new ForbiddenException(
-        'Seul le propriétaire du projet ou un administrateur peut le supprimer',
-      );
-    }
+    // OWNER uniquement — l'ADMIN global est traité comme OWNER par le service d'accès.
+    await this.projectAccess.requireOwner(projectId, userId);
 
     // Soft delete
     const deletedProject = await this.prisma.project.update({
