@@ -2,19 +2,25 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { getCorsOptions } from './common/cors.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // L'API est servie derrière Nginx Proxy Manager. Sans cette option, Express
+  // voit l'IP du proxy pour toutes les requêtes : le rate-limit par IP
+  // compterait alors l'ensemble des visiteurs sur un seul compteur.
+  // La valeur 1 = un seul proxy de confiance devant l'application.
+  app.set('trust proxy', 1);
 
   // Lecture des cookies (refresh token en httpOnly)
   app.use(cookieParser());
 
-  const corsOrigin = process.env.CORS_ORIGIN;
   app.enableCors({
-    origin: corsOrigin ? corsOrigin.split(',').map((o) => o.trim()) : true,
-    credentials: true,
+    ...getCorsOptions(),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });

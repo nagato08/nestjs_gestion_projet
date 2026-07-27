@@ -4,22 +4,41 @@ import { Global, Logger, OnModuleInit } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import { SocketService } from './socket/socket.service';
 import { PrismaService } from './prisma.service';
 import { ProjectAccessService } from './common/access/project-access.service';
+import { getCorsOptions } from './common/cors.config';
+
+/** Données attachées à la socket après authentification du handshake. */
+interface SocketData {
+  userId?: string;
+}
+
+type AuthSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 @Global()
 @WebSocketGateway({
-  cors: '*',
+  // Mêmes origines que l'API HTTP. Note : le CORS ne protège que les
+  // navigateurs — la vraie barrière est l'authentification du handshake.
+  cors: getCorsOptions(),
   namespace: '/',
 })
-export class AppGateway implements OnGatewayInit, OnModuleInit {
+export class AppGateway
+  implements OnGatewayInit, OnGatewayConnection, OnModuleInit
+{
   private readonly logger = new Logger(AppGateway.name);
 
   @WebSocketServer()
@@ -29,6 +48,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
     private socketService: SocketService,
     private prisma: PrismaService,
     private projectAccess: ProjectAccessService,
+    private jwtService: JwtService,
   ) {}
 
   afterInit() {
@@ -37,6 +57,55 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
 
   onModuleInit() {
     this.server.emit('confirmation');
+  }
+
+  /**
+   * Authentifie la connexion WebSocket.
+   *
+   * Le JWT est vérifié au handshake et l'identité qui en découle est stockée
+   * sur la socket. Tous les handlers s'appuient dessus : l'identifiant fourni
+   * par le client dans les messages n'est jamais une source d'autorité, sinon
+   * n'importe qui pourrait se faire passer pour un autre utilisateur.
+   */
+  handleConnection(socket: AuthSocket) {
+    const token = this.extractToken(socket);
+
+    if (!token) {
+      this.logger.warn('Connexion WebSocket sans jeton : rejetée');
+      socket.emit('error', { message: 'Authentification requise' });
+      socket.disconnect(true);
+      return;
+    }
+
+    try {
+      const payload = this.jwtService.verify<{ sub: string }>(token);
+      socket.data.userId = payload.sub;
+      // Room personnelle : les notifications n'exigent plus d'événement client.
+      socket.join(`user:${payload.sub}`);
+    } catch {
+      this.logger.warn('Connexion WebSocket avec jeton invalide : rejetée');
+      socket.emit('error', { message: 'Jeton invalide ou expiré' });
+      socket.disconnect(true);
+    }
+  }
+
+  /**
+   * Récupère le jeton depuis le handshake, quel que soit l'emplacement
+   * utilisé par le client (`auth.token`, en-tête Authorization, ou query).
+   */
+  private extractToken(socket: AuthSocket): string | null {
+    const raw =
+      (socket.handshake.auth?.token as string | undefined) ??
+      socket.handshake.headers.authorization ??
+      (socket.handshake.query?.token as string | undefined);
+
+    if (!raw) return null;
+    return raw.startsWith('Bearer ') ? raw.slice(7) : raw;
+  }
+
+  /** Identité authentifiée de la socket, ou `null` si absente. */
+  private getUserId(socket: AuthSocket): string | null {
+    return socket.data?.userId ?? null;
   }
 
   /**
@@ -59,7 +128,10 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   }
 
   @SubscribeMessage('test')
-  async sendMessage(@MessageBody() data, @ConnectedSocket() socket: Socket) {
+  async sendMessage(
+    @MessageBody() data,
+    @ConnectedSocket() socket: AuthSocket,
+  ) {
     this.logger.debug(data);
     socket.emit('chat', "Salut j'ai bien reçu ton message");
   }
@@ -67,19 +139,40 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   @SubscribeMessage('join-chat-room')
   async joinChatRoom(
     @MessageBody() conversationId: string,
-    @ConnectedSocket() socket: Socket,
+    @ConnectedSocket() socket: AuthSocket,
   ) {
-    this.logger.debug({ conversationId });
+    const userId = this.getUserId(socket);
+    if (!conversationId || !userId) return;
+
+    // Une conversation appartient à un projet : on exige d'en être membre,
+    // sinon n'importe qui pourrait écouter la room d'un projet fermé.
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { projectId: true },
+    });
+
+    if (!conversation) {
+      socket.emit('error', { message: 'Conversation introuvable' });
+      return;
+    }
+
+    const isMember = await this.verifyProjectMembership(
+      conversation.projectId,
+      userId,
+    );
+    if (!isMember) {
+      socket.emit('error', { message: "Vous n'avez pas accès à ce projet" });
+      return;
+    }
+
     socket.join(conversationId);
   }
 
   @SubscribeMessage('join-user-room')
-  async joinUserRoom(
-    @MessageBody() data: { userId: string },
-    @ConnectedSocket() socket: Socket,
-  ) {
-    // Rejoindre la room de l'utilisateur pour recevoir ses notifications
-    const userId = data.userId || (socket.handshake.query.userId as string);
+  async joinUserRoom(@ConnectedSocket() socket: AuthSocket) {
+    // La room personnelle est déjà rejointe au handshake ; on se contente de
+    // confirmer. L'identifiant vient du jeton, jamais du message client.
+    const userId = this.getUserId(socket);
     if (userId) {
       socket.join(`user:${userId}`);
       socket.emit('joined-user-room', { userId });
@@ -88,14 +181,15 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
 
   @SubscribeMessage('join-project-room')
   async joinProjectRoom(
-    @MessageBody() data: { projectId: string; userId: string },
-    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { projectId: string },
+    @ConnectedSocket() socket: AuthSocket,
   ) {
-    const { projectId, userId } = data;
+    const { projectId } = data;
+    const userId = this.getUserId(socket);
 
     if (!projectId || !userId) {
       socket.emit('error', {
-        message: 'projectId et userId sont requis',
+        message: 'projectId requis et connexion authentifiée',
       });
       return;
     }
@@ -152,7 +246,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   @SubscribeMessage('leave-project-room')
   async leaveProjectRoom(
     @MessageBody() data: { projectId: string },
-    @ConnectedSocket() socket: Socket,
+    @ConnectedSocket() socket: AuthSocket,
   ) {
     const { projectId } = data;
     if (projectId) {
@@ -164,10 +258,11 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   @SubscribeMessage('user:typing')
   async handleTypingStart(
     @MessageBody()
-    data: { projectId: string; userId: string; userName: string },
-    @ConnectedSocket() socket: Socket,
+    data: { projectId: string; userName?: string },
+    @ConnectedSocket() socket: AuthSocket,
   ) {
-    const { projectId, userId, userName } = data;
+    const { projectId, userName } = data;
+    const userId = this.getUserId(socket);
 
     if (!projectId || !userId) {
       return;
@@ -187,10 +282,11 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
 
   @SubscribeMessage('user:stopped-typing')
   async handleTypingStop(
-    @MessageBody() data: { projectId: string; userId: string },
-    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { projectId: string },
+    @ConnectedSocket() socket: AuthSocket,
   ) {
-    const { projectId, userId } = data;
+    const { projectId } = data;
+    const userId = this.getUserId(socket);
 
     if (!projectId || !userId) {
       return;
@@ -208,7 +304,7 @@ export class AppGateway implements OnGatewayInit, OnModuleInit {
   }
 
   @SubscribeMessage('connection')
-  async sendConfirm(@ConnectedSocket() socket: Socket) {
+  async sendConfirm(@ConnectedSocket() socket: AuthSocket) {
     socket.emit('confirmation');
   }
 }

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +19,7 @@ import { PlanningModule } from './planning/planning.module';
 import { PrismaService } from './prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AccessModule } from './common/access/access.module';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { AiModule } from './ai/ai.module';
 import { HealthController } from './health/health.controller';
 
@@ -49,7 +50,7 @@ import { HealthController } from './health/health.controller';
     AppService,
     AppGateway,
     PrismaService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: UserThrottlerGuard },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- provider Nest
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],

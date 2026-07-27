@@ -21,15 +21,20 @@ ce qu'autorisent les rôles inférieurs.
 | Action                                            | Rôle minimum |
 | ------------------------------------------------- | ------------ |
 | Consulter projet, tâches, planning, docs, chat    | `VIEWER`     |
-| Créer/modifier tâches assignées, commenter, poster dans le chat, déposer un document, saisir du temps | `MEMBER` |
+| Commenter une tâche, poster dans le chat, déposer un document | `MEMBER` |
+| Modifier une tâche, changer son statut, y saisir du temps | `MEMBER` **et être assigné à cette tâche** |
 | Créer/supprimer des tâches, assigner, gérer les dépendances | `ADMIN` |
 | Ajouter/retirer des membres, changer leur rôle, modifier le projet, régénérer le token | `ADMIN` |
 | Supprimer le projet, transférer la propriété      | `OWNER`      |
 
-Deux règles complémentaires :
+Trois règles complémentaires :
 
 - Le propriétaire du projet est toujours traité comme `OWNER`.
 - Un **ADMIN global** est traité comme `OWNER` sur tous les projets.
+- Un `MEMBER` ne modifie **que les tâches qui lui sont assignées** : il exécute
+  son travail, il ne réorganise pas celui des autres. Les gestionnaires
+  (`ADMIN` et au-dessus) agissent sur toutes les tâches du projet. Commenter
+  reste ouvert à tous les membres, sans exigence d'assignation.
 
 Garde-fous anti-escalade : on ne peut ni attribuer un rôle supérieur ou égal au
 sien, ni agir sur un membre de rang supérieur ou égal, ni modifier son propre rôle.

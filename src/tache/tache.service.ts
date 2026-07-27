@@ -60,9 +60,28 @@ export class TacheService {
   }
 
   /**
-   * UTILITAIRE : Modification d'une tâche — MEMBER minimum.
+   * UTILITAIRE : Modification d'une tâche.
+   *
+   * Gestionnaires : toutes les tâches. MEMBER : uniquement celles qui lui
+   * sont assignées. VIEWER : aucune.
    */
   private async verifyTaskContributorAccess(
+    taskId: string,
+    userId: string,
+  ): Promise<{ id: string; projectId: string }> {
+    const { id, projectId } = await this.projectAccess.requireTaskWriteAccess(
+      taskId,
+      userId,
+    );
+    return { id, projectId };
+  }
+
+  /**
+   * UTILITAIRE : Participation à la discussion d'une tâche — MEMBER minimum,
+   * sans exigence d'assignation. Commenter reste ouvert à toute l'équipe :
+   * c'est de la collaboration, pas une modification du travail d'autrui.
+   */
+  private async verifyTaskDiscussionAccess(
     taskId: string,
     userId: string,
   ): Promise<{ id: string; projectId: string }> {
@@ -690,7 +709,7 @@ export class TacheService {
 
   // 🔟 Créer un commentaire sur une tâche
   async createComment(taskId: string, userId: string, dto: CreateCommentDto) {
-    await this.verifyTaskContributorAccess(taskId, userId);
+    await this.verifyTaskDiscussionAccess(taskId, userId);
 
     const comment = await this.prisma.comment.create({
       data: {
@@ -726,7 +745,7 @@ export class TacheService {
     }
 
     // Vérifier l'accès à la tâche
-    await this.verifyTaskContributorAccess(comment.taskId, userId);
+    await this.verifyTaskDiscussionAccess(comment.taskId, userId);
 
     // Seul l'auteur peut supprimer son commentaire
     if (comment.userId !== userId) {

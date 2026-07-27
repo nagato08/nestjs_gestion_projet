@@ -141,6 +141,46 @@ export class ProjectAccessService {
   }
 
   /**
+   * Droit de MODIFIER une tâche précise.
+   *
+   * Les gestionnaires (ADMIN projet et au-dessus) agissent sur toutes les
+   * tâches du projet. Un MEMBER n'agit que sur les tâches qui lui sont
+   * assignées : il exécute son travail, il ne réorganise pas celui des autres.
+   * Un VIEWER est exclu.
+   */
+  async requireTaskWriteAccess(
+    taskId: string,
+    userId: string,
+  ): Promise<{ id: string; projectId: string; role: ProjectRole }> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        projectId: true,
+        assignments: { where: { userId }, select: { id: true } },
+      },
+    });
+
+    if (!task) throw new NotFoundException('Tâche introuvable');
+
+    const role = await this.requireProjectRole(
+      task.projectId,
+      userId,
+      ProjectRole.MEMBER,
+    );
+
+    const isManager =
+      PROJECT_ROLE_RANK[role] >= PROJECT_ROLE_RANK[ProjectRole.ADMIN];
+    if (!isManager && task.assignments.length === 0) {
+      throw new ForbiddenException(
+        'Vous ne pouvez modifier que les tâches qui vous sont assignées',
+      );
+    }
+
+    return { id: task.id, projectId: task.projectId, role };
+  }
+
+  /**
    * Rôles effectifs de l'utilisateur sur plusieurs projets, en une requête.
    * Sert à exposer `myRole` dans les listes sans faire du N+1.
    */

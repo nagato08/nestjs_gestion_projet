@@ -28,7 +28,21 @@ import { Roles } from './decorators/roles.decorator';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
+
+/**
+ * Limite stricte sur les routes d'authentification anonymes.
+ *
+ * Ces routes sont les seules exploitables sans compte : sans plafond dédié,
+ * les quotas généraux (300 req/min) laisseraient largement place au bourrage
+ * d'identifiants. Le compteur retombe sur l'IP faute d'utilisateur connu.
+ *
+ * La clé doit être le nom d'un limiteur déclaré dans `ThrottlerModule`
+ * (`app.module.ts`) : un nom inconnu serait silencieusement ignoré. On
+ * resserre donc la fenêtre `long`, qui est la plus large.
+ */
+const AUTH_THROTTLE = { long: { limit: 10, ttl: 60_000 } };
 
 const REFRESH_COOKIE = 'refresh_token';
 const REFRESH_TTL_DAYS = Number(process.env.JWT_REFRESH_TTL_DAYS ?? 7);
@@ -53,6 +67,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Inscrire un utilisateur' })
   async register(
     @Body() dto: CreateUserDto,
@@ -68,6 +83,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Connecter un utilisateur' })
   async login(
     @Body() loginDto: LoginDTO,
@@ -199,16 +215,19 @@ export class AuthController {
   }
 
   @Post('request-reset-password')
+  @Throttle(AUTH_THROTTLE)
   async requestResetPassword(@Body('email') email: string) {
     return this.authService.resetUserPasswordRequest({ email });
   }
 
   @Get('verify-reset-password-token')
+  @Throttle(AUTH_THROTTLE)
   async verifyResetPasswordToken(@Query('token') token: string) {
     return this.authService.verifyResetPasswordToken({ token });
   }
 
   @Post('reset-password')
+  @Throttle(AUTH_THROTTLE)
   async resetUserPassword(@Body() resetPasswordDto: ResetUserPasswordDto) {
     return this.authService.resetUserPassword({ resetPasswordDto });
   }

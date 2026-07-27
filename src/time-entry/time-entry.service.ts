@@ -7,7 +7,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectRole, ProjectStatus, TaskStatus } from '@prisma/client';
+import { ProjectStatus, TaskStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { StartTimerDto } from './dto/start-timer.dto';
 import { CreateManualTimeEntryDto } from './dto/create-manual-time-entry.dto';
@@ -27,12 +27,9 @@ export class TimeEntryService {
     taskId: string,
     userId: string,
   ): Promise<void> {
-    // Saisir du temps est une écriture : MEMBER minimum, VIEWER exclu.
-    await this.projectAccess.requireTaskRole(
-      taskId,
-      userId,
-      ProjectRole.MEMBER,
-    );
+    // On ne pointe du temps que sur ses propres tâches. Les gestionnaires
+    // du projet gardent l'accès à toutes.
+    await this.projectAccess.requireTaskWriteAccess(taskId, userId);
   }
 
   /**
