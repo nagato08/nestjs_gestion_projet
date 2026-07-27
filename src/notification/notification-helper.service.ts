@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { MailerService } from 'src/mailer.service';
 import { NotificationService } from './notification.service';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class NotificationHelperService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly mailerService: MailerService,
   ) {}
 
   // 1️⃣ Notifier lors de l'assignation d'une tâche
@@ -172,21 +174,39 @@ export class NotificationHelperService {
   }
 
   // 6️⃣ Notifier lors de l'ajout d'un membre à un projet
+  /**
+   * Notifie un utilisateur ajouté à un projet — ajout direct par un
+   * gestionnaire ou jointure par code/token. Deux canaux : notification
+   * in-app (respecte les préférences utilisateur) et email de confirmation.
+   *
+   * L'email est best-effort : `sendProjectMemberAddedEmail` avale ses propres
+   * erreurs pour ne jamais faire échouer l'ajout du membre à cause d'un
+   * incident d'envoi.
+   */
   async notifyProjectMemberAdded(projectId: string, newMemberId: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        members: { select: { userId: true } },
-      },
-    });
+    const [project, newMember] = await Promise.all([
+      this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { name: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: newMemberId },
+        select: { firstName: true, email: true },
+      }),
+    ]);
 
-    if (!project) return;
+    if (!project || !newMember) return;
 
-    // Notifier le nouveau membre
     await this.notificationService.createNotification({
       type: 'PROJECT_MEMBER_ADDED',
       content: `Vous avez été ajouté au projet "${project.name}"`,
       userId: newMemberId,
+    });
+
+    await this.mailerService.sendProjectMemberAddedEmail({
+      recipient: newMember.email,
+      firstName: newMember.firstName,
+      projectName: project.name,
     });
   }
 

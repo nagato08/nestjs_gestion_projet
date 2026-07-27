@@ -4,11 +4,17 @@ import { NotificationService } from './notification.service';
 import { NotificationHelperService } from './notification-helper.service';
 import { PrismaService } from 'src/prisma.service';
 import { SocketModule } from 'src/socket/socket.module';
+import { MailerService } from 'src/mailer.service';
 
 @Module({
   imports: [SocketModule],
   controllers: [NotificationController],
-  providers: [NotificationService, NotificationHelperService, PrismaService],
+  providers: [
+    NotificationService,
+    NotificationHelperService,
+    PrismaService,
+    MailerService,
+  ],
   exports: [NotificationService, NotificationHelperService],
 })
 export class NotificationModule {}

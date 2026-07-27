@@ -106,6 +106,74 @@ export class MailerService {
     }
   }
 
+  /**
+   * Invitation à rejoindre un projet.
+   *
+   * Le lien pointe vers la page d'accueil du projet côté front, avec le token
+   * en query : le front y gère l'inscription si nécessaire puis rejoint le
+   * projet automatiquement, que le destinataire ait déjà un compte ou non.
+   */
+  async sendProjectInviteEmail({
+    recipient,
+    projectName,
+    inviterName,
+    inviteToken,
+  }: {
+    recipient: string;
+    projectName: string;
+    inviterName: string;
+    inviteToken: string;
+  }) {
+    try {
+      const link = `${this.frontendUrl}/invite/${inviteToken}`;
+      await this.mailer.emails.send({
+        from: this.from,
+        to: [recipient],
+        subject: `${inviterName} vous invite à rejoindre "${projectName}"`,
+        html: this.layout(
+          'Invitation à un projet',
+          `<p><strong>${inviterName}</strong> vous invite à rejoindre le projet <strong>${projectName}</strong> sur ${APP_NAME}.</p>
+           <p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#4f46e5;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Rejoindre le projet</a></p>
+           <p style="color:#666;font-size:12px">Si vous n'avez pas encore de compte, vous pourrez en créer un depuis ce lien.</p>`,
+        ),
+      });
+      this.logger.log(`Email d'invitation projet envoyé à ${recipient}`);
+    } catch (error) {
+      this.logger.error('sendProjectInviteEmail', error);
+      throw error;
+    }
+  }
+
+  /** Confirmation envoyée à un membre ajouté ou ayant rejoint un projet. */
+  async sendProjectMemberAddedEmail({
+    recipient,
+    firstName,
+    projectName,
+  }: {
+    recipient: string;
+    firstName: string;
+    projectName: string;
+  }) {
+    try {
+      const link = `${this.frontendUrl}/projects`;
+      await this.mailer.emails.send({
+        from: this.from,
+        to: [recipient],
+        subject: `Vous avez rejoint "${projectName}"`,
+        html: this.layout(
+          `Bonjour ${firstName}`,
+          `<p>Vous faites maintenant partie du projet <strong>${projectName}</strong> sur ${APP_NAME}.</p>
+           <p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#4f46e5;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Voir le projet</a></p>`,
+        ),
+      });
+      this.logger.log(`Email membre ajouté envoyé à ${recipient}`);
+    } catch (error) {
+      // Ne casse jamais l'ajout du membre : l'email est une commodité, pas
+      // une condition de succès de l'action.
+      this.logger.error('sendProjectMemberAddedEmail', error);
+    }
+  }
+
   private layout(title: string, body: string): string {
     return `<!doctype html>
 <html><body style="font-family:-apple-system,Segoe UI,sans-serif;background:#f3f4f6;margin:0;padding:24px">

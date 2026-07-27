@@ -17,6 +17,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { RemoveProjectMemberDto } from './dto/remove-project-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { InviteProjectMemberDto } from './dto/invite-project-member.dto';
 import { ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
@@ -94,6 +95,30 @@ export class ProjectController {
     return this.projectService.addMember(id, req.user.id, addProjectMemberDto);
   }
 
+  @Post(':id/invite')
+  @Audit({
+    action: 'project.invite.send',
+    targetType: 'Project',
+    metadata: (req) => ({
+      email: (req.body as InviteProjectMemberDto)?.email,
+    }),
+  })
+  @ApiOperation({
+    summary:
+      'Inviter par email (propriétaire ou administrateur du projet) — envoie le lien d’invitation',
+  })
+  inviteMember(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() inviteProjectMemberDto: InviteProjectMemberDto,
+  ) {
+    return this.projectService.inviteMemberByEmail(
+      id,
+      req.user.id,
+      inviteProjectMemberDto,
+    );
+  }
+
   @Delete(':id/members')
   @Audit({
     action: 'project.member.remove',
@@ -164,12 +189,25 @@ export class ProjectController {
 
   // 5. TOUT LE MONDE PEUT REJOINDRE
   @Post('join/code')
+  @Audit({
+    action: 'project.member.join',
+    targetType: 'Project',
+    // Le projet n'est connu qu'après résolution du code : l'id vient du résultat.
+    targetId: (_req, result) => (result as { projectId?: string })?.projectId,
+    metadata: () => ({ method: 'code' }),
+  })
   @ApiOperation({ summary: 'Rejoindre via code' })
   joinByCode(@Body('projectCode') projectCode: string, @Req() req: any) {
     return this.projectService.joinByProjectCode(projectCode, req.user.id);
   }
 
   @Post('join/token')
+  @Audit({
+    action: 'project.member.join',
+    targetType: 'Project',
+    targetId: (_req, result) => (result as { projectId?: string })?.projectId,
+    metadata: () => ({ method: 'token' }),
+  })
   @ApiOperation({ summary: 'Rejoindre via token' })
   joinByToken(@Body('inviteToken') inviteToken: string, @Req() req: any) {
     return this.projectService.joinByInviteToken(inviteToken, req.user.id);

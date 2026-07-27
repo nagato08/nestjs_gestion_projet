@@ -68,6 +68,22 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     category: 'Membres',
   },
   {
+    action: 'project.invite.send',
+    label: 'Invitation envoyée',
+    description:
+      'Le lien d’invitation du projet a été envoyé par email à une adresse.',
+    severity: 'info',
+    category: 'Membres',
+  },
+  {
+    action: 'project.member.join',
+    label: 'Adhésion au projet',
+    description:
+      'Un utilisateur a rejoint le projet lui-même, via un code ou un lien d’invitation.',
+    severity: 'info',
+    category: 'Membres',
+  },
+  {
     action: 'project.member.role.update',
     label: 'Changement de rôle',
     description:

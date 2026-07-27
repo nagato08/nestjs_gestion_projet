@@ -10,7 +10,6 @@ import { SocketModule } from './socket/socket.module';
 import { ProjectModule } from './project/project.module';
 import { TacheModule } from './tache/tache.module';
 import { DocumentModule } from './document/document.module';
-import { MessageModule } from './message/message.module';
 import { NotificationModule } from './notification/notification.module';
 import { TimeEntryModule } from './time-entry/time-entry.module';
 import { CompanySettingsModule } from './company-settings/company-settings.module';
@@ -41,7 +40,6 @@ import { HealthController } from './health/health.controller';
     ProjectModule,
     TacheModule,
     DocumentModule,
-    MessageModule,
     NotificationModule,
     TimeEntryModule,
     CompanySettingsModule,

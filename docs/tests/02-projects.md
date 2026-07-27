@@ -299,6 +299,36 @@ curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID/regenerate-token \
 
 ---
 
+### 9 bis. Inviter par email (ADMIN projet)
+
+| Élément | Valeur                  |
+| ------- | ----------------------- |
+| Méthode | `POST`                  |
+| URL     | `/projects/:id/invite`  |
+| Auth    | Oui + **ADMIN projet**  |
+
+**Body (JSON)** : `email`.
+
+N'ajoute **aucun membre immédiatement** : le projet n'a qu'un seul token
+d'invitation partagé, l'endpoint se contente de l'envoyer par email plutôt que
+de le faire copier-coller manuellement. Le destinataire peut ne pas encore
+avoir de compte — le lien `/invite/:token` du front le guide vers
+l'inscription puis rejoint automatiquement le projet.
+
+**Exemple curl :**
+
+```bash
+curl -s -X POST http://localhost:4000/projects/PROJECT_ID/invite \
+  -H "Authorization: Bearer VOTRE_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "collegue@exemple.fr"}'
+```
+
+**À vérifier :** email reçu (template Resend), 409 si la personne est déjà
+membre, 403 si `MEMBER`/`VIEWER`.
+
+---
+
 ### 10. Supprimer un projet (owner)
 
 | Élément | Valeur          |
