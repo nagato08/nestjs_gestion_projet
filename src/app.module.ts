@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -20,6 +20,9 @@ import { PrismaService } from './prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AccessModule } from './common/access/access.module';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
+import { AuditModule } from './common/audit/audit.module';
+import { AuditInterceptor } from './common/audit/audit.interceptor';
+import { RequestIdMiddleware } from './common/logging/request-id.middleware';
 import { AiModule } from './ai/ai.module';
 import { HealthController } from './health/health.controller';
 
@@ -31,6 +34,7 @@ import { HealthController } from './health/health.controller';
       { name: 'long', ttl: 60_000, limit: 300 },
     ]),
     AccessModule,
+    AuditModule,
     AuthModule,
     ChatModule,
     SocketModule,
@@ -51,8 +55,15 @@ import { HealthController } from './health/health.controller';
     AppGateway,
     PrismaService,
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- provider Nest
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // En tête de chaîne : toutes les requêtes doivent porter un identifiant
+    // de corrélation, y compris celles qui échouent plus loin.
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

@@ -19,6 +19,7 @@ import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
 import { ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Audit } from 'src/common/audit/audit.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiBearerAuth()
@@ -29,6 +30,17 @@ export class TacheController {
 
   // 1️⃣ Créer une tâche
   @Post()
+  @Audit({
+    action: 'task.create',
+    targetType: 'Task',
+    // L'identifiant n'existe qu'une fois la tâche créée : on le lit dans la réponse.
+    targetId: (_req, result) => (result as { id?: string })?.id,
+    metadata: (req) => ({
+      title: (req.body as CreateTaskDto)?.title,
+      projectId: (req.body as CreateTaskDto)?.projectId,
+      priority: (req.body as CreateTaskDto)?.priority,
+    }),
+  })
   @ApiOperation({ summary: 'Créer une nouvelle tâche' })
   create(@Req() req: any, @Body() createTaskDto: CreateTaskDto) {
     return this.tacheService.createTask(req.user.id, createTaskDto);
@@ -59,6 +71,13 @@ export class TacheController {
 
   // 5️⃣ Mettre à jour une tâche
   @Patch(':id')
+  @Audit({
+    action: 'task.update',
+    targetType: 'Task',
+    metadata: (req) => ({
+      fields: Object.keys((req.body as object) ?? {}),
+    }),
+  })
   @ApiOperation({ summary: 'Mettre à jour une tâche' })
   update(
     @Param('id') id: string,
@@ -70,6 +89,7 @@ export class TacheController {
 
   // 6️⃣ Supprimer une tâche
   @Delete(':id')
+  @Audit({ action: 'task.delete', targetType: 'Task' })
   @ApiOperation({ summary: 'Supprimer une tâche' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.tacheService.deleteTask(id, req.user.id);
@@ -77,6 +97,13 @@ export class TacheController {
 
   // 7️⃣ Changer le statut d'une tâche (pour Kanban)
   @Patch(':id/status')
+  @Audit({
+    action: 'task.status.update',
+    targetType: 'Task',
+    metadata: (req) => ({
+      status: (req.body as ChangeTaskStatusDto)?.status,
+    }),
+  })
   @ApiOperation({
     summary: "Changer le statut d'une tâche (TODO → DOING → DONE)",
   })
@@ -94,6 +121,13 @@ export class TacheController {
 
   // 8️⃣ Assigner des utilisateurs à une tâche
   @Post(':id/assign')
+  @Audit({
+    action: 'task.assign',
+    targetType: 'Task',
+    metadata: (req) => ({
+      assignedUserIds: (req.body as AssignTaskDto)?.userIds,
+    }),
+  })
   @ApiOperation({
     summary: 'Assigner un ou plusieurs utilisateurs à une tâche',
   })
@@ -107,6 +141,13 @@ export class TacheController {
 
   // 9️⃣ Retirer un utilisateur d'une tâche
   @Delete(':id/assign/:userId')
+  @Audit({
+    action: 'task.unassign',
+    targetType: 'Task',
+    metadata: (req) => ({
+      memberId: (req.params as Record<string, string>)?.userId,
+    }),
+  })
   @ApiOperation({ summary: "Retirer un utilisateur d'une tâche" })
   unassignUser(
     @Param('id') id: string,
@@ -118,6 +159,13 @@ export class TacheController {
 
   // 🔟 Créer une dépendance entre tâches
   @Post(':id/dependencies')
+  @Audit({
+    action: 'task.dependency.create',
+    targetType: 'Task',
+    metadata: (req) => ({
+      blockedTaskId: (req.body as CreateTaskDependencyDto)?.blockedTaskId,
+    }),
+  })
   @ApiOperation({
     summary: 'Créer une dépendance : cette tâche bloque une autre tâche',
   })
@@ -135,6 +183,13 @@ export class TacheController {
 
   // 1️⃣1️⃣ Supprimer une dépendance
   @Delete(':id/dependencies/:blockedTaskId')
+  @Audit({
+    action: 'task.dependency.delete',
+    targetType: 'Task',
+    metadata: (req) => ({
+      blockedTaskId: (req.params as Record<string, string>)?.blockedTaskId,
+    }),
+  })
   @ApiOperation({ summary: 'Supprimer une dépendance entre tâches' })
   deleteDependency(
     @Param('id') id: string,

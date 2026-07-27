@@ -81,6 +81,8 @@ model User {
   documentComments DocumentComment[]
 
   refreshTokens RefreshToken[]
+
+  auditLogs AuditLog[]
 }
 
 // =========================================================
@@ -104,6 +106,49 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// =========================================================
+// 2.c JOURNAL D'AUDIT
+// =========================================================
+
+/// Trace immuable des actions sensibles : « qui a fait quoi, quand, sur quoi ».
+/// Aucune relation vers la cible : l'entrée doit survivre à la suppression de
+/// l'objet audité, sinon on perd justement la trace des suppressions.
+model AuditLog {
+  id String @id @default(cuid())
+
+  /// Auteur de l'action. Null si le compte est supprimé par la suite : on
+  /// conserve l'entrée (onDelete: SetNull) plutôt que d'effacer l'historique.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Dénormalisé : reste lisible même après suppression du compte.
+  userEmail String?
+
+  /// Verbe métier, ex. "project.delete", "member.role.update".
+  action String
+
+  /// Type et identifiant de l'objet visé, ex. "Project" / "clx123".
+  targetType String?
+  targetId   String?
+
+  /// Contexte utile à l'enquête (ancien/nouveau rôle, nom du projet...).
+  metadata Json?
+
+  /// Origine de la requête.
+  ip        String?
+  userAgent String?
+
+  /// Corrélation avec les logs applicatifs de la même requête.
+  requestId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
 
 // =========================================================

@@ -22,6 +22,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Audit } from 'src/common/audit/audit.decorator';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard) // On garde les Guards ici (Jwt vérifie l'identité, RolesGuard vérifie les permissions)
@@ -53,6 +54,15 @@ export class ProjectController {
 
   // 4. LE SERVICE VÉRIFIE LE RÔLE PROJET (ADMIN projet minimum)
   @Patch(':id')
+  @Audit({
+    action: 'project.update',
+    targetType: 'Project',
+    // Le statut est la modification qui engage le plus : on la trace à part.
+    metadata: (req) => ({
+      status: (req.body as UpdateProjectDto)?.status,
+      fields: Object.keys((req.body as object) ?? {}),
+    }),
+  })
   @ApiOperation({
     summary: 'Mettre à jour un projet (propriétaire ou administrateur projet)',
   })
@@ -65,6 +75,14 @@ export class ProjectController {
   }
 
   @Post(':id/members')
+  @Audit({
+    action: 'project.member.add',
+    targetType: 'Project',
+    metadata: (req) => ({
+      memberId: (req.body as AddProjectMemberDto)?.userId,
+      role: (req.body as AddProjectMemberDto)?.role ?? 'MEMBER',
+    }),
+  })
   @ApiOperation({
     summary: 'Ajouter un membre (propriétaire ou administrateur du projet)',
   })
@@ -77,6 +95,13 @@ export class ProjectController {
   }
 
   @Delete(':id/members')
+  @Audit({
+    action: 'project.member.remove',
+    targetType: 'Project',
+    metadata: (req) => ({
+      memberId: (req.body as RemoveProjectMemberDto)?.userId,
+    }),
+  })
   @ApiOperation({
     summary: 'Retirer un membre (propriétaire ou administrateur du projet)',
   })
@@ -93,6 +118,14 @@ export class ProjectController {
   }
 
   @Patch(':id/members/role')
+  @Audit({
+    action: 'project.member.role.update',
+    targetType: 'Project',
+    metadata: (req) => ({
+      memberId: (req.body as UpdateMemberRoleDto)?.userId,
+      newRole: (req.body as UpdateMemberRoleDto)?.role,
+    }),
+  })
   @ApiOperation({
     summary:
       'Changer le rôle projet d’un membre (propriétaire ou administrateur du projet)',
@@ -110,6 +143,13 @@ export class ProjectController {
   }
 
   @Patch(':id/transfer-ownership')
+  @Audit({
+    action: 'project.transfer_ownership',
+    targetType: 'Project',
+    metadata: (req) => ({
+      newOwnerId: (req.body as { newOwnerId?: string })?.newOwnerId,
+    }),
+  })
   @ApiOperation({
     summary:
       'Transférer la propriété du projet à un autre membre (Owner uniquement)',
@@ -143,6 +183,7 @@ export class ProjectController {
 
   // 🔟 Supprimer un projet (soft delete)
   @Delete(':id')
+  @Audit({ action: 'project.delete', targetType: 'Project' })
   @ApiOperation({
     summary: 'Supprimer un projet (soft delete - Owner ou Admin uniquement)',
   })

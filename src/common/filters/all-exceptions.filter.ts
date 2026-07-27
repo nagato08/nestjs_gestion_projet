@@ -7,7 +7,9 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { Request, Response } from 'express';
+import { getRequestContext } from '../logging/request-context';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -35,14 +37,31 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? (message as { message: string | string[] }).message
         : message;
 
+    const requestId = getRequestContext()?.requestId;
+
     this.logger.error(
       `${request.method} ${request.url} ${status} - ${String(body)}`,
       exception instanceof Error ? exception.stack : undefined,
     );
 
+    // Seules les erreurs serveur remontent à Sentry. Les 4xx sont des
+    // réponses métier attendues (validation, droits) : les envoyer noierait
+    // les vraies pannes sous le bruit.
+    if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
+      Sentry.withScope((scope) => {
+        if (requestId) scope.setTag('requestId', requestId);
+        scope.setTag('method', request.method);
+        scope.setTag('route', request.url);
+        Sentry.captureException(exception);
+      });
+    }
+
     response.status(status).json({
       statusCode: status,
       message: Array.isArray(body) ? body : [body],
+      // Permet à l'utilisateur de citer l'identifiant exact de sa requête
+      // lorsqu'il signale un incident.
+      requestId,
       error:
         exception instanceof HttpException
           ? exception.name

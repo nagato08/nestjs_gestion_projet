@@ -29,6 +29,7 @@ import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Audit } from 'src/common/audit/audit.decorator';
 import { Role } from '@prisma/client';
 
 /**
@@ -182,6 +183,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('users')
+  @Audit({
+    action: 'user.create_by_admin',
+    targetType: 'User',
+    targetId: (_req, result) => (result as { id?: string })?.id,
+    metadata: (req) => ({
+      email: (req.body as AdminCreateUserDto)?.email,
+      role: (req.body as AdminCreateUserDto)?.role,
+    }),
+  })
   @ApiOperation({
     summary:
       'Créer un utilisateur (admin uniquement). Mot de passe généré + envoyé par email.',
@@ -203,6 +213,13 @@ export class AuthController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
+  @Audit({
+    action: 'user.delete',
+    targetType: 'User',
+    metadata: (req) => ({
+      reassignTo: (req.body as { reassignTo?: string })?.reassignTo,
+    }),
+  })
   async deleteUser(
     @Param('id') id: string,
     @Request() req,

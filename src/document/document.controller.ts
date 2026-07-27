@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Audit } from 'src/common/audit/audit.decorator';
 import { DocumentService } from './document.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -31,6 +32,15 @@ export class DocumentController {
 
   // 1️⃣ Créer un document (métadonnées uniquement)
   @Post()
+  @Audit({
+    action: 'document.create',
+    targetType: 'Document',
+    targetId: (_req, result) => (result as { id?: string })?.id,
+    metadata: (req) => ({
+      name: (req.body as CreateDocumentDto)?.name,
+      projectId: (req.body as CreateDocumentDto)?.projectId,
+    }),
+  })
   @ApiOperation({ summary: 'Créer un nouveau document (métadonnées)' })
   create(@Req() req: any, @Body() createDocumentDto: CreateDocumentDto) {
     return this.documentService.createDocument(req.user.id, createDocumentDto);
@@ -55,6 +65,18 @@ export class DocumentController {
   //     },
   //   },
   // })
+  @Audit({
+    action: 'document.version.upload',
+    targetType: 'Document',
+    metadata: (req) => {
+      const file = (req as { file?: Express.Multer.File }).file;
+      return {
+        fileName: file?.originalname,
+        fileSize: file?.size,
+        mimeType: file?.mimetype,
+      };
+    },
+  })
   @ApiOperation({ summary: "Uploader une nouvelle version d'un document" })
   uploadVersion(
     @Param('id') id: string,
@@ -93,6 +115,13 @@ export class DocumentController {
 
   // 6️⃣ Mettre à jour un document (nom)
   @Patch(':id')
+  @Audit({
+    action: 'document.update',
+    targetType: 'Document',
+    metadata: (req) => ({
+      fields: Object.keys((req.body as object) ?? {}),
+    }),
+  })
   @ApiOperation({ summary: 'Mettre à jour un document' })
   update(
     @Param('id') id: string,
@@ -108,6 +137,7 @@ export class DocumentController {
 
   // 7️⃣ Supprimer un document
   @Delete(':id')
+  @Audit({ action: 'document.delete', targetType: 'Document' })
   @ApiOperation({ summary: 'Supprimer un document' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.documentService.deleteDocument(id, req.user.id);
