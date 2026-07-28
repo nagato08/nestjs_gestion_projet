@@ -12,6 +12,7 @@ import {
   Req,
   Query,
 } from '@nestjs/common';
+import { PaginationDto } from 'src/common/pagination/pagination.dto';
 import { ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { NotificationService } from './notification.service';
@@ -35,10 +36,15 @@ export class NotificationController {
   @ApiOperation({ summary: 'Récupérer mes notifications' })
   getMyNotifications(
     @Req() req: any,
+    @Query() pagination: PaginationDto,
     @Query('unreadOnly') unreadOnly?: string,
   ) {
     const unread = unreadOnly === 'true';
-    return this.notificationService.getMyNotifications(req.user.id, unread);
+    return this.notificationService.getMyNotifications(
+      req.user.id,
+      unread,
+      pagination,
+    );
   }
 
   // 3️⃣ Compter les notifications non lues

@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import {
+  PaginationDto,
+  resolvePagination,
+} from 'src/common/pagination/pagination.dto';
 import { SocketService } from 'src/socket/socket.service';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
 import { NotificationService } from 'src/notification/notification.service';
@@ -244,34 +248,50 @@ export class ChatService {
   async getProjectConversation({
     projectId,
     userId,
+    pagination = {},
   }: {
     projectId: string;
     userId: string;
+    pagination?: PaginationDto;
   }) {
     await this.ensureProjectMember(projectId, userId);
+    const { skip, take } = resolvePagination(pagination);
 
     const conversation = await this.prisma.conversation.findUnique({
       where: { projectId },
-      select: {
-        id: true,
-        projectId: true,
-        updatedAt: true,
-        messages: {
-          select: CHAT_MESSAGE_SELECT,
-          orderBy: { createdAt: 'asc' },
-        },
-      },
+      select: { id: true, projectId: true, updatedAt: true },
     });
 
     if (!conversation) {
-      return { id: null, projectId, messages: [] };
+      return { id: null, projectId, messages: [], total: 0, hasMore: false };
     }
+
+    // Tri décroissant pour prendre les messages les plus récents : c'est ce
+    // qu'on ouvre en arrivant dans une conversation. Un tri croissant aurait
+    // ramené les tout premiers messages du projet.
+    const [recent, total] = await Promise.all([
+      this.prisma.chatMessage.findMany({
+        where: { conversationId: conversation.id },
+        select: CHAT_MESSAGE_SELECT,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.chatMessage.count({
+        where: { conversationId: conversation.id },
+      }),
+    ]);
 
     return {
       ...conversation,
-      messages: conversation.messages.map((msg) =>
-        this.toPayload(msg, projectId),
-      ),
+      // Remis dans l'ordre de lecture : l'affichage attend du chronologique.
+      messages: recent
+        .slice()
+        .reverse()
+        .map((msg) => this.toPayload(msg, projectId)),
+      total,
+      // Permet au client de proposer « charger les messages précédents ».
+      hasMore: skip + recent.length < total,
     };
   }
 }

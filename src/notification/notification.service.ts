@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
+import { Notification } from '@prisma/client';
+import {
+  Paginated,
+  PaginationDto,
+  resolvePagination,
+} from 'src/common/pagination/pagination.dto';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { SocketService } from 'src/socket/socket.service';
 
@@ -60,16 +66,36 @@ export class NotificationService {
   }
 
   // 2️⃣ Récupérer toutes les notifications d'un utilisateur
-  async getMyNotifications(userId: string, unreadOnly = false) {
-    const notifications = await this.prisma.notification.findMany({
-      where: {
-        userId,
-        ...(unreadOnly && { isRead: false }),
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * Notifications de l'utilisateur, page par page.
+   *
+   * Cette collection ne cesse de croître : un compte actif depuis six mois en
+   * accumule des milliers, et les renvoyer toutes chargeait autant la base que
+   * le navigateur pour un panneau qui n'en montre qu'une poignée.
+   */
+  async getMyNotifications(
+    userId: string,
+    unreadOnly = false,
+    pagination: PaginationDto = {},
+  ): Promise<Paginated<Notification>> {
+    const { skip, take } = resolvePagination(pagination);
+    const where = {
+      userId,
+      ...(unreadOnly && { isRead: false }),
+    };
 
-    return notifications;
+    // Total et page en parallèle : l'interface annonce « 50 sur 1 240 ».
+    const [items, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+
+    return { items, total, skip, take };
   }
 
   // 3️⃣ Marquer une notification comme lue

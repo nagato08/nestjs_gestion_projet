@@ -6,7 +6,9 @@ import {
   Post,
   Request,
   UseGuards,
+  Query,
 } from '@nestjs/common';
+import { PaginationDto } from 'src/common/pagination/pagination.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from 'src/auth/jwt.strategy';
@@ -42,10 +44,12 @@ export class ChatController {
   async getProjectConversation(
     @Param('projectId') projectId: string,
     @Request() request: RequestWithUser,
+    @Query() pagination: PaginationDto,
   ) {
     return await this.chatService.getProjectConversation({
       projectId,
       userId: request.user.id,
+      pagination,
     });
   }
 }
