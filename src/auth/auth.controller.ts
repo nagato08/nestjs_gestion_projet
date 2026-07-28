@@ -16,6 +16,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { AVATAR_UPLOAD } from 'src/common/upload/upload.config';
 import type { Request as ExpressRequest, Response } from 'express';
 import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -161,7 +162,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('profile/avatar')
-  @UseInterceptors(FileInterceptor('file'))
+  // Images seules, 2 Mo : une photo de profil n'a pas besoin de plus.
+  @UseInterceptors(FileInterceptor('file', AVATAR_UPLOAD))
   @ApiOperation({ summary: 'Uploader un avatar' })
   async uploadAvatar(
     @Request() req: any,

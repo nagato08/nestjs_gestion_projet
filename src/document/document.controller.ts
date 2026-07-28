@@ -15,7 +15,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { DOCUMENT_UPLOAD } from 'src/common/upload/upload.config';
 import { ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Audit } from 'src/common/audit/audit.decorator';
@@ -49,9 +49,10 @@ export class DocumentController {
   // 2️⃣ Uploader une version d'un document
   @Post(':id/versions')
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-    }),
+    // Taille et type bornés : sans plafond, un seul appel authentifié suffit
+    // à saturer la mémoire du conteneur, les fichiers y transitant avant
+    // d'être poussés vers le stockage distant.
+    FileInterceptor('file', DOCUMENT_UPLOAD),
   )
   @ApiConsumes('multipart/form-data')
   // @ApiBody({
