@@ -69,6 +69,7 @@ model User {
   timeEntries     TimeEntry[]
   comments        Comment[]
   invitationsSent ProjectInvitation[] @relation("InvitationsSent")
+  templatesCreated ProjectTemplate[]  @relation("TemplatesCreated")
   notifications   Notification[]
   documents       Document[]
   sentMessages    ChatMessage[]
@@ -191,6 +192,8 @@ model Project {
   documents    Document[]
   conversation Conversation?
   invitations  ProjectInvitation[]
+  sprints      Sprint[]
+  milestones   Milestone[]
 
   createdAt DateTime @default(now())
 }
@@ -289,6 +292,15 @@ model Task {
   startDate DateTime?
   endDate   DateTime?
 
+  // Baseline : dates de référence figées à la validation du planning.
+  // Comparées aux dates courantes, elles montrent la dérive du projet.
+  baselineStart DateTime?
+  baselineEnd   DateTime?
+
+  // Sprint auquel la tâche est rattachée (optionnel : hors sprint = backlog)
+  sprintId String?
+  sprint   Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+
   // PERT : estimations pour te = (o + 4m + p) / 6 (en jours)
   optimisticDays  Int?
   probableDays    Int?
@@ -309,9 +321,114 @@ model Task {
   assignments TaskAssignment[]
   comments    Comment[]
   timeEntries TimeEntry[]
+  checklist   ChecklistItem[]
+
+  // Récurrence : la tâche se régénère automatiquement une fois terminée.
+  recurrence      TaskRecurrence?
+  /// Tâche modèle dont celle-ci est une occurrence générée.
+  recurrenceOfId  String?
+  recurrenceOf    Task?  @relation("TaskOccurrences", fields: [recurrenceOfId], references: [id], onDelete: SetNull)
+  occurrences     Task[] @relation("TaskOccurrences")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([sprintId])
+  @@index([recurrenceOfId])
+}
+
+/// Élément de liste de contrôle dans une tâche.
+/// Plus léger qu'une sous-tâche : pas de dates, pas d'assignation.
+model ChecklistItem {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  label String
+  done  Boolean @default(false)
+
+  /// Ordre d'affichage dans la liste.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+/// Règle de répétition attachée à une tâche modèle.
+model TaskRecurrence {
+  id     String @id @default(cuid())
+  taskId String @unique
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  frequency RecurrenceFrequency
+  /// Toutes les N périodes : 2 + WEEKLY = une semaine sur deux.
+  interval  Int                 @default(1)
+
+  /// Arrêt de la répétition. Null = sans fin.
+  until DateTime?
+
+  /// Dernière occurrence engendrée, pour ne pas produire de doublon.
+  lastGeneratedAt DateTime?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Modèle de projet réutilisable : structure de tâches figée, réinstanciable.
+model ProjectTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  /// Visible par tous, ou réservé à son auteur.
+  isShared Boolean @default(true)
+
+  createdById String?
+  createdBy   User?   @relation("TemplatesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  tasks ProjectTemplateTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+}
+
+/// Tâche type d'un modèle. Les dates sont relatives au démarrage du projet,
+/// en jours : un modèle doit rester applicable à n'importe quelle date.
+model ProjectTemplateTask {
+  id         String          @id @default(cuid())
+  templateId String
+  template   ProjectTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String? @db.Text
+  priority    Priority @default(MEDIUM)
+
+  /// Décalage en jours par rapport au début du projet.
+  startOffsetDays Int @default(0)
+  durationDays    Int @default(1)
+
+  storyPoints Int?
+
+  /// Ordre, et cible des dépendances internes au modèle.
+  position Int @default(0)
+
+  /// Positions des tâches du modèle qui bloquent celle-ci.
+  blockedByPositions Int[]
+
+  checklist String[]
+
+  @@index([templateId])
 }
 
 model TaskDependency {
@@ -319,8 +436,68 @@ model TaskDependency {
   blockingTaskId String
   blockedTaskId  String
 
+  /// Décalage en jours entre la fin du bloquant et le début du bloqué.
+  /// 0 = enchaînement immédiat, positif = temps d'attente imposé.
+  lagDays Int @default(0)
+
   blockingTask Task @relation("BlockingTask", fields: [blockingTaskId], references: [id])
   blockedTask  Task @relation("BlockedTask", fields: [blockedTaskId], references: [id])
+
+  @@unique([blockingTaskId, blockedTaskId])
+}
+
+/// Itération de travail à durée fixe, support du burndown.
+///
+/// Le burndown supposait jusqu'ici une période arbitraire passée en query :
+/// le graphe existait sans que « le sprint » soit une réalité de l'application.
+model Sprint {
+  id   String @id @default(cuid())
+  name String
+  goal String? @db.Text
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+
+  status SprintStatus @default(PLANNED)
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+/// Point de repère daté du projet : livraison, revue, échéance contractuelle.
+/// Sans durée, contrairement à une tâche — c'est un instant, pas un travail.
+model Milestone {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  date DateTime
+
+  /// Atteint ou non. Un jalon dépassé et non atteint est en retard.
+  reached   Boolean   @default(false)
+  reachedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model TaskAssignment {

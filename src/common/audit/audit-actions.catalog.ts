@@ -15,7 +15,8 @@ export type AuditCategory =
   | 'Membres'
   | 'Tâches'
   | 'Documents'
-  | 'Comptes';
+  | 'Comptes'
+  | 'Planning';
 
 export interface AuditActionDescriptor {
   action: string;
@@ -202,6 +203,77 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
       'Un document et son historique de versions ont été supprimés du projet.',
     severity: 'warning',
     category: 'Documents',
+  },
+
+  // --- Planning ---
+  {
+    action: 'task.reschedule',
+    label: 'Replanification',
+    description:
+      'Une tâche a été déplacée dans le Gantt. Les tâches qui en dépendent ont pu être repoussées automatiquement.',
+    severity: 'warning',
+    category: 'Planning',
+  },
+  {
+    action: 'project.baseline.set',
+    label: 'Référence de planning figée',
+    description:
+      'Les dates courantes ont été enregistrées comme référence. La dérive se mesure désormais par rapport à cette photographie.',
+    severity: 'warning',
+    category: 'Planning',
+  },
+  {
+    action: 'sprint.create',
+    label: 'Création de sprint',
+    description: 'Une itération a été ajoutée au projet.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'sprint.update',
+    label: 'Modification de sprint',
+    description:
+      'Les dates, l’objectif ou le statut d’un sprint ont été modifiés.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'sprint.delete',
+    label: 'Suppression de sprint',
+    description:
+      'Un sprint a été supprimé. Ses tâches sont retournées au backlog, elles ne sont pas perdues.',
+    severity: 'warning',
+    category: 'Planning',
+  },
+  {
+    action: 'sprint.tasks.assign',
+    label: 'Affectation au sprint',
+    description:
+      'Des tâches ont été rattachées à un sprint ou renvoyées au backlog.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'milestone.create',
+    label: 'Création de jalon',
+    description: 'Un point de repère daté a été ajouté au projet.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'milestone.update',
+    label: 'Modification de jalon',
+    description:
+      'La date, le libellé ou l’état d’atteinte d’un jalon a été modifié.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'milestone.delete',
+    label: 'Suppression de jalon',
+    description: 'Un jalon a été retiré du projet.',
+    severity: 'warning',
+    category: 'Planning',
   },
 
   // --- Comptes ---

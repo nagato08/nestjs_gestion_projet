@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
@@ -15,12 +16,16 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
 import { ProjectRole, ProjectStatus, TaskStatus } from '@prisma/client';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
+import { ChecklistService } from './checklist.service';
 
 @Injectable()
 export class TacheService {
+  private readonly logger = new Logger(TacheService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly checklistService: ChecklistService,
   ) {}
 
   /**
@@ -830,7 +835,23 @@ export class TacheService {
       return updated;
     });
 
-    return updatedTask;
+    // Une tâche récurrente engendre son occurrence suivante une fois
+    // terminée. Hors transaction et sans attente : la génération ne doit pas
+    // faire échouer le changement de statut si elle rencontre un problème.
+    let nextOccurrenceId: string | null = null;
+    if (dto.status === TaskStatus.DONE) {
+      try {
+        nextOccurrenceId =
+          await this.checklistService.generateNextOccurrence(taskId);
+      } catch (error) {
+        this.logger.error(
+          `Échec de génération de l'occurrence suivante pour ${taskId}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
+
+    return { ...updatedTask, nextOccurrenceId };
   }
 
   // 1️⃣3️⃣ Récupérer les tâches assignées à un utilisateur

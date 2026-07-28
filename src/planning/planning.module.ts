@@ -5,6 +5,9 @@ import { PertService } from './pert.service';
 import { DashboardService } from './dashboard.service';
 import { BurndownService } from './burndown.service';
 import { WorkloadService } from './workload.service';
+import { ScheduleService } from './schedule.service';
+import { SprintService } from './sprint.service';
+import { MilestoneService } from './milestone.service';
 import { PrismaService } from 'src/prisma.service';
 
 @Module({
@@ -15,6 +18,9 @@ import { PrismaService } from 'src/prisma.service';
     DashboardService,
     BurndownService,
     WorkloadService,
+    ScheduleService,
+    SprintService,
+    MilestoneService,
     PrismaService,
   ],
   exports: [
@@ -23,6 +29,9 @@ import { PrismaService } from 'src/prisma.service';
     DashboardService,
     BurndownService,
     WorkloadService,
+    ScheduleService,
+    SprintService,
+    MilestoneService,
   ],
 })
 export class PlanningModule {}

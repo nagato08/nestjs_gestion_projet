@@ -59,7 +59,13 @@ export class PertService {
     })) as unknown as PertTaskRow[];
 
     if (tasks.length === 0) {
-      return { nodes: [], edges: [], criticalPath: [] };
+      return {
+        nodes: [],
+        edges: [],
+        criticalPath: [],
+        milestones: [],
+        projectDurationDays: 0,
+      };
     }
 
     const taskMap = new Map(
@@ -92,11 +98,164 @@ export class PertService {
     // Chemin critique : plus long chemin (en jours) dans le DAG
     const criticalPath = this.computeCriticalPath(tasks, taskMap);
 
+    // Marges par tâche (passes avant/arrière). Une marge nulle signifie
+    // qu'aucun retard n'est absorbable sans décaler la fin du projet.
+    const floats = this.computeFloats(taskMap);
+
+    const milestones = await this.prisma.milestone.findMany({
+      where: { projectId },
+      orderBy: { date: 'asc' },
+      select: { id: true, name: true, date: true, reached: true },
+    });
+
+    const nodes = Array.from(taskMap.values()).map((node) => {
+      const f = floats.get(node.id);
+      return {
+        ...node,
+        earliestStart: f?.earliestStart ?? null,
+        earliestFinish: f?.earliestFinish ?? null,
+        latestStart: f?.latestStart ?? null,
+        latestFinish: f?.latestFinish ?? null,
+        slackDays: f?.slack ?? null,
+        // Le chemin critique se déduit des marges plutôt que d'un unique
+        // parcours remonté : un projet peut avoir plusieurs chemins critiques
+        // parallèles, que le backtracking seul manquerait.
+        isCritical: f ? f.slack === 0 : false,
+      };
+    });
+
     return {
-      nodes: Array.from(taskMap.values()),
+      nodes,
+      milestones: milestones.map((m) => ({
+        ...m,
+        date: m.date.toISOString(),
+        overdue: !m.reached && m.date.getTime() < Date.now(),
+      })),
+      projectDurationDays: Math.max(
+        0,
+        ...[...floats.values()].map((f) => f.earliestFinish),
+      ),
       edges,
       criticalPath,
     };
+  }
+
+  /**
+   * Marges par tâche, via les deux passes classiques de la méthode CPM.
+   *
+   * Passe avant : au plus tôt, une tâche démarre quand tous ses prédécesseurs
+   * sont finis. Passe arrière : au plus tard, elle doit finir avant que ses
+   * successeurs ne doivent démarrer, sans repousser la fin du projet.
+   *
+   * La marge est l'écart entre les deux. Marge nulle = tout retard sur cette
+   * tâche décale la fin du projet : c'est la définition du chemin critique.
+   */
+  private computeFloats(
+    taskMap: Map<
+      string,
+      { id: string; expectedDays: number | null; blockingIds: string[] }
+    >,
+  ): Map<
+    string,
+    {
+      earliestStart: number;
+      earliestFinish: number;
+      latestStart: number;
+      latestFinish: number;
+      slack: number;
+    }
+  > {
+    const nodes = [...taskMap.values()];
+    const duration = (id: string) => taskMap.get(id)?.expectedDays ?? 0;
+
+    // Successeurs, pour la passe arrière.
+    const successors = new Map<string, string[]>();
+    for (const node of nodes) {
+      for (const blockingId of node.blockingIds) {
+        const list = successors.get(blockingId) ?? [];
+        list.push(node.id);
+        successors.set(blockingId, list);
+      }
+    }
+
+    // --- Passe avant : au plus tôt ---
+    const earliestStart = new Map<string, number>(nodes.map((n) => [n.id, 0]));
+    // Relaxation itérative plutôt qu'un tri topologique : elle converge de la
+    // même façon et reste bornée même si les données contiennent un cycle.
+    for (let pass = 0; pass < nodes.length; pass++) {
+      let stable = true;
+      for (const node of nodes) {
+        const candidate = node.blockingIds.reduce((max, blockingId) => {
+          if (!taskMap.has(blockingId)) return max;
+          const finish =
+            (earliestStart.get(blockingId) ?? 0) + duration(blockingId);
+          return Math.max(max, finish);
+        }, 0);
+
+        if (candidate > (earliestStart.get(node.id) ?? 0)) {
+          earliestStart.set(node.id, candidate);
+          stable = false;
+        }
+      }
+      if (stable) break;
+    }
+
+    const projectEnd = nodes.reduce(
+      (max, n) =>
+        Math.max(max, (earliestStart.get(n.id) ?? 0) + duration(n.id)),
+      0,
+    );
+
+    // --- Passe arrière : au plus tard ---
+    const latestFinish = new Map<string, number>(
+      nodes.map((n) => [n.id, projectEnd]),
+    );
+    for (let pass = 0; pass < nodes.length; pass++) {
+      let stable = true;
+      for (const node of nodes) {
+        const nexts = successors.get(node.id) ?? [];
+        if (nexts.length === 0) continue;
+
+        const candidate = nexts.reduce((min, nextId) => {
+          const nextLatestStart =
+            (latestFinish.get(nextId) ?? projectEnd) - duration(nextId);
+          return Math.min(min, nextLatestStart);
+        }, Number.POSITIVE_INFINITY);
+
+        if (candidate < (latestFinish.get(node.id) ?? projectEnd)) {
+          latestFinish.set(node.id, candidate);
+          stable = false;
+        }
+      }
+      if (stable) break;
+    }
+
+    const result = new Map<
+      string,
+      {
+        earliestStart: number;
+        earliestFinish: number;
+        latestStart: number;
+        latestFinish: number;
+        slack: number;
+      }
+    >();
+
+    for (const node of nodes) {
+      const es = earliestStart.get(node.id) ?? 0;
+      const lf = latestFinish.get(node.id) ?? projectEnd;
+      const d = duration(node.id);
+
+      result.set(node.id, {
+        earliestStart: es,
+        earliestFinish: es + d,
+        latestStart: lf - d,
+        latestFinish: lf,
+        slack: Math.max(0, lf - d - es),
+      });
+    }
+
+    return result;
   }
 
   /**

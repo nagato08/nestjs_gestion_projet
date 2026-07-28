@@ -33,6 +33,7 @@ export class BurndownService {
     userId: string,
     startDate?: string,
     endDate?: string,
+    sprintId?: string,
   ) {
     await this.ensureProjectAccess(projectId, userId);
 
@@ -42,8 +43,36 @@ export class BurndownService {
     });
     if (!project) throw new NotFoundException('Projet introuvable');
 
-    const start = startDate ? new Date(startDate) : project.startDate;
-    const end = endDate ? new Date(endDate) : (project.endDate ?? new Date());
+    // Un sprint donne au graphe sa raison d'être : sa période et son
+    // périmètre de tâches remplacent les dates arbitraires du projet.
+    const sprint = sprintId
+      ? await this.prisma.sprint.findFirst({
+          where: { id: sprintId, projectId },
+          select: {
+            id: true,
+            name: true,
+            goal: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+          },
+        })
+      : null;
+
+    if (sprintId && !sprint) {
+      throw new NotFoundException('Sprint introuvable');
+    }
+
+    const start = sprint
+      ? sprint.startDate
+      : startDate
+        ? new Date(startDate)
+        : project.startDate;
+    const end = sprint
+      ? sprint.endDate
+      : endDate
+        ? new Date(endDate)
+        : (project.endDate ?? new Date());
     const totalDays =
       Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) || 1;
 
@@ -57,7 +86,14 @@ export class BurndownService {
     // select includes storyPoints; cast needed until Prisma client is regenerated
     /* eslint-disable @typescript-eslint/no-unsafe-assignment -- result cast to BurndownTaskRow[] */
     const tasks = (await this.prisma.task.findMany({
-      where: { projectId, parentId: null },
+      // Avec un sprint, le périmètre est celui du sprint et non tout le
+      // projet — c'est ce qui distingue un burndown d'itération d'une courbe
+      // d'avancement global.
+      where: {
+        projectId,
+        parentId: null,
+        ...(sprint ? { sprintId: sprint.id } : {}),
+      },
       select: {
         id: true,
         storyPoints: true,
@@ -113,6 +149,16 @@ export class BurndownService {
       dates,
       ideal,
       actual,
+      // Null quand la courbe porte sur le projet entier : le front distingue
+      // ainsi un vrai burndown de sprint d'un avancement global.
+      sprint: sprint
+        ? {
+            id: sprint.id,
+            name: sprint.name,
+            goal: sprint.goal,
+            status: sprint.status,
+          }
+        : null,
     };
   }
 }

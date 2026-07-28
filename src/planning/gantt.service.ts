@@ -12,6 +12,8 @@ type GanttTaskRow = {
   startDate: Date | null;
   endDate: Date | null;
   deadline: Date | null;
+  baselineStart: Date | null;
+  baselineEnd: Date | null;
   assignments: {
     user: {
       id: string;
@@ -20,12 +22,20 @@ type GanttTaskRow = {
       avatar: string | null;
     };
   }[];
-  blockedBy: { blockingTaskId: string }[];
+  blockedBy: { blockingTaskId: string; lagDays: number }[];
 };
+
+/** Écart en jours entre deux dates, arrondi au jour entier. */
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
+}
 
 /**
  * Données pour la vue Gantt : tâches avec dates début/fin et dépendances.
- * Le front affiche des barres horizontales ; le drag & drop met à jour via PATCH /tache/:id (startDate, endDate).
+ *
+ * Le déplacement d'une barre passe par `PATCH /planning/tasks/:id/schedule`,
+ * qui répercute le décalage sur les tâches bloquées — et non plus par un
+ * simple `PATCH /tasks/:id` qui laissait le planning incohérent.
  */
 @Injectable()
 export class GanttService {
@@ -67,10 +77,22 @@ export class GanttService {
             },
           },
         },
-        blockedBy: { select: { blockingTaskId: true } },
+        blockedBy: { select: { blockingTaskId: true, lagDays: true } },
       },
       orderBy: { createdAt: 'asc' },
     })) as unknown as GanttTaskRow[];
+
+    // Jalons du projet : points datés affichés sur la même frise.
+    const milestones = await this.prisma.milestone.findMany({
+      where: { projectId },
+      orderBy: { date: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        date: true,
+        reached: true,
+      },
+    });
 
     this.logger.log(
       `✅ [Gantt] ${tasks.length} tâches trouvées pour le projet`,
@@ -91,15 +113,33 @@ export class GanttService {
                 (24 * 60 * 60 * 1000),
             )
           : null,
-      dependencies: t.blockedBy.map((d) => d.blockingTaskId),
+      baselineStart: t.baselineStart?.toISOString() ?? null,
+      baselineEnd: t.baselineEnd?.toISOString() ?? null,
+      // Dérive par rapport à la référence : positif = en retard sur le plan
+      // initial. Null tant qu'aucune baseline n'a été figée.
+      driftDays:
+        t.baselineEnd && t.endDate
+          ? daysBetween(t.endDate, t.baselineEnd)
+          : null,
+      dependencies: t.blockedBy.map((d) => ({
+        taskId: d.blockingTaskId,
+        lagDays: d.lagDays,
+      })),
       assignees: t.assignments.map((a) => a.user),
     }));
 
-    this.logger.debug(
-      `[Gantt] Données formatées:`,
-      JSON.stringify(ganttTasks.slice(0, 1), null, 2),
-    );
-
-    return ganttTasks;
+    return {
+      tasks: ganttTasks,
+      milestones: milestones.map((m) => ({
+        id: m.id,
+        name: m.name,
+        date: m.date.toISOString(),
+        reached: m.reached,
+        // Jalon dépassé sans avoir été atteint : le signaler vaut mieux que
+        // le laisser se confondre avec les autres.
+        overdue: !m.reached && m.date.getTime() < Date.now(),
+      })),
+      hasBaseline: ganttTasks.some((t) => t.baselineEnd !== null),
+    };
   }
 }

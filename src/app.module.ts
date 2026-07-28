@@ -15,6 +15,7 @@ import { TimeEntryModule } from './time-entry/time-entry.module';
 import { CompanySettingsModule } from './company-settings/company-settings.module';
 import { NotificationSettingsModule } from './notification-settings/notification-settings.module';
 import { PlanningModule } from './planning/planning.module';
+import { SearchModule } from './search/search.module';
 import { PrismaService } from './prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AccessModule } from './common/access/access.module';
@@ -45,6 +46,7 @@ import { HealthController } from './health/health.controller';
     CompanySettingsModule,
     NotificationSettingsModule,
     PlanningModule,
+    SearchModule,
     AiModule,
   ],
   controllers: [AppController, HealthController],

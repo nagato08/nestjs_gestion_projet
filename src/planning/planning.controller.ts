@@ -1,11 +1,32 @@
-import { Controller, Get, Query, Param, UseGuards, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Audit } from 'src/common/audit/audit.decorator';
 import { GanttService } from './gantt.service';
 import { PertService } from './pert.service';
 import { DashboardService } from './dashboard.service';
 import { BurndownService } from './burndown.service';
 import { WorkloadService } from './workload.service';
+import { ScheduleService } from './schedule.service';
+import { SprintService } from './sprint.service';
+import { MilestoneService } from './milestone.service';
+import { CreateSprintDto } from './dto/create-sprint.dto';
+import { UpdateSprintDto } from './dto/update-sprint.dto';
+import { CreateMilestoneDto } from './dto/create-milestone.dto';
+import { UpdateMilestoneDto } from './dto/update-milestone.dto';
+import { RescheduleTaskDto } from './dto/reschedule-task.dto';
+import { AssignSprintTasksDto } from './dto/assign-sprint-tasks.dto';
 
 @ApiTags('Planning')
 @ApiBearerAuth()
@@ -18,7 +39,219 @@ export class PlanningController {
     private readonly dashboardService: DashboardService,
     private readonly burndownService: BurndownService,
     private readonly workloadService: WorkloadService,
+    private readonly scheduleService: ScheduleService,
+    private readonly sprintService: SprintService,
+    private readonly milestoneService: MilestoneService,
   ) {}
+
+  // ---------------------------------------------------------------
+  // Replanification (Gantt interactif)
+  // ---------------------------------------------------------------
+
+  /**
+   * Déplace une tâche et répercute sur les tâches bloquées.
+   *
+   * Remplace le `PATCH /tasks/:id` utilisé jusqu'ici pour le drag & drop, qui
+   * écrivait deux dates sans tenir compte des dépendances.
+   */
+  @Patch('tasks/:taskId/schedule')
+  @Audit({
+    action: 'task.reschedule',
+    targetType: 'Task',
+    targetId: (req) => (req.params as Record<string, string>)?.taskId,
+    metadata: (req, result) => ({
+      startDate: (req.body as RescheduleTaskDto)?.startDate,
+      endDate: (req.body as RescheduleTaskDto)?.endDate,
+      cascadedCount: (result as { cascadedCount?: number })?.cascadedCount,
+    }),
+  })
+  @ApiOperation({
+    summary:
+      'Replanifier une tâche avec propagation aux dépendances (ADMIN projet)',
+  })
+  rescheduleTask(
+    @Param('taskId') taskId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: RescheduleTaskDto,
+  ) {
+    return this.scheduleService.rescheduleTask(
+      taskId,
+      req.user.id,
+      dto.startDate,
+      dto.endDate,
+    );
+  }
+
+  /** Fige les dates courantes comme référence de comparaison. */
+  @Post('projects/:projectId/baseline')
+  @Audit({ action: 'project.baseline.set', targetType: 'Project' })
+  @ApiOperation({
+    summary: 'Enregistrer la référence de planning (ADMIN projet)',
+  })
+  setBaseline(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.scheduleService.setBaseline(projectId, req.user.id);
+  }
+
+  // ---------------------------------------------------------------
+  // Sprints
+  // ---------------------------------------------------------------
+
+  @Get('projects/:projectId/sprints')
+  @ApiOperation({ summary: 'Sprints du projet avec avancement' })
+  listSprints(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.sprintService.list(projectId, req.user.id);
+  }
+
+  @Post('projects/:projectId/sprints')
+  @Audit({
+    action: 'sprint.create',
+    targetType: 'Project',
+    metadata: (req) => ({ name: (req.body as CreateSprintDto)?.name }),
+  })
+  @ApiOperation({ summary: 'Créer un sprint (ADMIN projet)' })
+  createSprint(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateSprintDto,
+  ) {
+    return this.sprintService.create(projectId, req.user.id, dto);
+  }
+
+  @Patch('projects/:projectId/sprints/:sprintId')
+  @Audit({
+    action: 'sprint.update',
+    targetType: 'Project',
+    metadata: (req) => ({
+      sprintId: (req.params as Record<string, string>)?.sprintId,
+      status: (req.body as UpdateSprintDto)?.status,
+    }),
+  })
+  @ApiOperation({ summary: 'Modifier un sprint (ADMIN projet)' })
+  updateSprint(
+    @Param('projectId') projectId: string,
+    @Param('sprintId') sprintId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdateSprintDto,
+  ) {
+    return this.sprintService.update(projectId, sprintId, req.user.id, dto);
+  }
+
+  @Delete('projects/:projectId/sprints/:sprintId')
+  @Audit({
+    action: 'sprint.delete',
+    targetType: 'Project',
+    metadata: (req) => ({
+      sprintId: (req.params as Record<string, string>)?.sprintId,
+    }),
+  })
+  @ApiOperation({ summary: 'Supprimer un sprint (ADMIN projet)' })
+  deleteSprint(
+    @Param('projectId') projectId: string,
+    @Param('sprintId') sprintId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.sprintService.remove(projectId, sprintId, req.user.id);
+  }
+
+  @Patch('projects/:projectId/sprints/tasks/assign')
+  @Audit({
+    action: 'sprint.tasks.assign',
+    targetType: 'Project',
+    metadata: (req) => ({
+      sprintId: (req.body as AssignSprintTasksDto)?.sprintId,
+      taskCount: (req.body as AssignSprintTasksDto)?.taskIds?.length,
+    }),
+  })
+  @ApiOperation({
+    summary: 'Rattacher des tâches à un sprint, ou les renvoyer au backlog',
+  })
+  assignSprintTasks(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: AssignSprintTasksDto,
+  ) {
+    return this.sprintService.assignTasks(
+      projectId,
+      req.user.id,
+      dto.taskIds,
+      dto.sprintId ?? null,
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Jalons
+  // ---------------------------------------------------------------
+
+  @Get('projects/:projectId/milestones')
+  @ApiOperation({ summary: 'Jalons du projet' })
+  listMilestones(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.milestoneService.list(projectId, req.user.id);
+  }
+
+  @Post('projects/:projectId/milestones')
+  @Audit({
+    action: 'milestone.create',
+    targetType: 'Project',
+    metadata: (req) => ({ name: (req.body as CreateMilestoneDto)?.name }),
+  })
+  @ApiOperation({ summary: 'Créer un jalon (ADMIN projet)' })
+  createMilestone(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateMilestoneDto,
+  ) {
+    return this.milestoneService.create(projectId, req.user.id, dto);
+  }
+
+  @Patch('projects/:projectId/milestones/:milestoneId')
+  @Audit({
+    action: 'milestone.update',
+    targetType: 'Project',
+    metadata: (req) => ({
+      milestoneId: (req.params as Record<string, string>)?.milestoneId,
+      reached: (req.body as UpdateMilestoneDto)?.reached,
+    }),
+  })
+  @ApiOperation({ summary: 'Modifier un jalon (ADMIN projet)' })
+  updateMilestone(
+    @Param('projectId') projectId: string,
+    @Param('milestoneId') milestoneId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdateMilestoneDto,
+  ) {
+    return this.milestoneService.update(
+      projectId,
+      milestoneId,
+      req.user.id,
+      dto,
+    );
+  }
+
+  @Delete('projects/:projectId/milestones/:milestoneId')
+  @Audit({
+    action: 'milestone.delete',
+    targetType: 'Project',
+    metadata: (req) => ({
+      milestoneId: (req.params as Record<string, string>)?.milestoneId,
+    }),
+  })
+  @ApiOperation({ summary: 'Supprimer un jalon (ADMIN projet)' })
+  deleteMilestone(
+    @Param('projectId') projectId: string,
+    @Param('milestoneId') milestoneId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.milestoneService.remove(projectId, milestoneId, req.user.id);
+  }
 
   /** Gantt : données pour la vue calendrier (barres par tâche). Drag & drop = PATCH /tache/:id avec startDate/endDate. */
   @Get('projects/:projectId/gantt')
@@ -68,12 +301,14 @@ export class PlanningController {
     @Req() req: { user: { id: string } },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('sprintId') sprintId?: string,
   ) {
     return this.burndownService.getBurndownData(
       projectId,
       req.user.id,
       startDate,
       endDate,
+      sprintId,
     );
   }
 

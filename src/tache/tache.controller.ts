@@ -6,6 +6,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -18,6 +19,10 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
+import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
+import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
+import { SetRecurrenceDto } from './dto/set-recurrence.dto';
+import { ChecklistService } from './checklist.service';
 import { ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Audit } from 'src/common/audit/audit.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -26,7 +31,10 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TacheController {
-  constructor(private readonly tacheService: TacheService) {}
+  constructor(
+    private readonly tacheService: TacheService,
+    private readonly checklistService: ChecklistService,
+  ) {}
 
   // 1️⃣ Créer une tâche
   @Post()
@@ -219,5 +227,72 @@ export class TacheController {
   @ApiOperation({ summary: 'Supprimer un commentaire' })
   deleteComment(@Param('commentId') commentId: string, @Req() req: any) {
     return this.tacheService.deleteComment(commentId, req.user.id);
+  }
+
+  // ---------------------------------------------------------------
+  // Liste de contrôle
+  // ---------------------------------------------------------------
+
+  @Get(':id/checklist')
+  @ApiOperation({ summary: 'Éléments de la liste de contrôle' })
+  listChecklist(@Param('id') id: string, @Req() req: any) {
+    return this.checklistService.list(id, req.user.id);
+  }
+
+  @Post(':id/checklist')
+  @ApiOperation({ summary: 'Ajouter un élément à la liste de contrôle' })
+  addChecklistItem(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() dto: CreateChecklistItemDto,
+  ) {
+    return this.checklistService.add(id, req.user.id, dto);
+  }
+
+  @Patch('checklist/:itemId')
+  @ApiOperation({ summary: 'Cocher ou renommer un élément' })
+  updateChecklistItem(
+    @Param('itemId') itemId: string,
+    @Req() req: any,
+    @Body() dto: UpdateChecklistItemDto,
+  ) {
+    return this.checklistService.update(itemId, req.user.id, dto);
+  }
+
+  @Delete('checklist/:itemId')
+  @ApiOperation({ summary: 'Supprimer un élément de la liste' })
+  deleteChecklistItem(@Param('itemId') itemId: string, @Req() req: any) {
+    return this.checklistService.remove(itemId, req.user.id);
+  }
+
+  // ---------------------------------------------------------------
+  // Récurrence
+  // ---------------------------------------------------------------
+
+  @Put(':id/recurrence')
+  @Audit({
+    action: 'task.recurrence.set',
+    targetType: 'Task',
+    metadata: (req) => ({
+      frequency: (req.body as SetRecurrenceDto)?.frequency,
+      interval: (req.body as SetRecurrenceDto)?.interval ?? 1,
+    }),
+  })
+  @ApiOperation({
+    summary: 'Définir la récurrence d’une tâche (ADMIN projet)',
+  })
+  setRecurrence(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() dto: SetRecurrenceDto,
+  ) {
+    return this.checklistService.setRecurrence(id, req.user.id, dto);
+  }
+
+  @Delete(':id/recurrence')
+  @Audit({ action: 'task.recurrence.remove', targetType: 'Task' })
+  @ApiOperation({ summary: 'Supprimer la récurrence (ADMIN projet)' })
+  removeRecurrence(@Param('id') id: string, @Req() req: any) {
+    return this.checklistService.removeRecurrence(id, req.user.id);
   }
 }
