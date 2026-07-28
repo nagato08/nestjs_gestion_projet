@@ -44,11 +44,16 @@ export class NotificationService {
       },
     });
 
-    // Envoyer une notification en temps réel si activée
+    // Envoyer une notification en temps réel si activée.
+    //
+    // Le nom de l'événement doit rester `notification:new` : le front écoute
+    // exclusivement celui-là. Un `new-notification` émis ici n'atteignait
+    // personne, et les notifications n'apparaissaient qu'au rechargement de
+    // la page.
     if (shouldNotify && this.socketService.server) {
       this.socketService.server
         .to(`user:${dto.userId}`)
-        .emit('new-notification', notification);
+        .emit('notification:new', notification);
     }
 
     return notification;

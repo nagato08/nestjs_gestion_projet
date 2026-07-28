@@ -2,6 +2,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
@@ -10,6 +11,7 @@ import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateDocumentCommentDto } from './dto/create-document-comment.dto';
 import { ProjectRole } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary.service';
+import { NotificationHelperService } from 'src/notification/notification-helper.service';
 import {
   PROJECT_ROLE_RANK,
   ProjectAccessService,
@@ -30,11 +32,30 @@ type MulterFile = {
 
 @Injectable()
 export class DocumentService {
+  private readonly logger = new Logger(DocumentService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly notifications: NotificationHelperService,
   ) {}
+
+  /**
+   * Déclenche une notification sans jamais faire échouer l'action métier.
+   *
+   * Un document déposé le reste même si l'annonce échoue : l'erreur est
+   * tracée, pas propagée à l'appelant.
+   */
+  private notifySafely(operation: Promise<unknown>, context: string): void {
+    void operation.catch((error: unknown) => {
+      this.logger.warn(
+        `Notification "${context}" non délivrée : ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
 
   /**
    * UTILITAIRE : Consultation du projet — tout membre, VIEWER compris.
@@ -146,6 +167,11 @@ export class DocumentService {
         },
       },
     });
+
+    this.notifySafely(
+      this.notifications.notifyDocumentUploaded(document.id),
+      `dépôt du document ${document.id}`,
+    );
 
     return document;
   }
@@ -448,6 +474,11 @@ export class DocumentService {
         },
       },
     });
+
+    this.notifySafely(
+      this.notifications.notifyDocumentComment(documentId, userId),
+      `commentaire sur le document ${documentId}`,
+    );
 
     return comment;
   }

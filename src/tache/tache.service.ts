@@ -17,6 +17,7 @@ import { ChangeTaskStatusDto } from './dto/change-task-status.dto';
 import { ProjectRole, ProjectStatus, TaskStatus } from '@prisma/client';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
 import { ChecklistService } from './checklist.service';
+import { NotificationHelperService } from 'src/notification/notification-helper.service';
 
 @Injectable()
 export class TacheService {
@@ -26,7 +27,24 @@ export class TacheService {
     private readonly prisma: PrismaService,
     private readonly projectAccess: ProjectAccessService,
     private readonly checklistService: ChecklistService,
+    private readonly notifications: NotificationHelperService,
   ) {}
+
+  /**
+   * Déclenche une notification sans jamais faire échouer l'action métier.
+   *
+   * Prévenir est un effet de bord : une tâche assignée le reste même si le
+   * service de notification est indisponible. L'échec est tracé, pas propagé.
+   */
+  private notifySafely(operation: Promise<unknown>, context: string): void {
+    void operation.catch((error: unknown) => {
+      this.logger.warn(
+        `Notification "${context}" non délivrée : ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
 
   /**
    * UTILITAIRE : Lecture du projet — tout membre, y compris VIEWER.
@@ -233,6 +251,21 @@ export class TacheService {
         },
       },
     });
+
+    // Une tâche créée avec des assignés vaut assignation : sans cela, seule
+    // l'assignation ultérieure préviendrait, et le cas le plus courant —
+    // créer la tâche en désignant tout de suite qui s'en charge — passerait
+    // sous silence.
+    if (dto.assignedUserIds && dto.assignedUserIds.length > 0) {
+      this.notifySafely(
+        this.notifications.notifyTaskAssigned(
+          task.id,
+          dto.assignedUserIds,
+          userId,
+        ),
+        `création de la tâche ${task.id}`,
+      );
+    }
 
     return task;
   }
@@ -449,6 +482,7 @@ export class TacheService {
 
     // Le statut est modifiable par cette route aussi : completedAt doit y
     // suivre la meme regle que dans changeTaskStatus.
+    let statusChangedTo: TaskStatus | null = null;
     if (dto.status !== undefined) {
       const before = await this.prisma.task.findUniqueOrThrow({
         where: { id: taskId },
@@ -458,6 +492,9 @@ export class TacheService {
         updateData,
         this.completionPatch(before.status, dto.status),
       );
+      // Seul un changement effectif mérite d'être annoncé : réenregistrer une
+      // tâche sans toucher à son statut ne doit alerter personne.
+      if (dto.status !== before.status) statusChangedTo = dto.status;
     }
 
     const updatedTask = await this.prisma.task.update({
@@ -484,6 +521,17 @@ export class TacheService {
         },
       },
     });
+
+    if (statusChangedTo) {
+      this.notifySafely(
+        this.notifications.notifyTaskStatusChanged(
+          taskId,
+          statusChangedTo,
+          userId,
+        ),
+        `mise à jour du statut de la tâche ${taskId}`,
+      );
+    }
 
     return updatedTask;
   }
@@ -585,6 +633,11 @@ export class TacheService {
           },
         }),
       ),
+    );
+
+    this.notifySafely(
+      this.notifications.notifyTaskAssigned(taskId, dto.userIds, userId),
+      `assignation de la tâche ${taskId}`,
     );
 
     return assignments;
@@ -769,6 +822,11 @@ export class TacheService {
       },
     });
 
+    this.notifySafely(
+      this.notifications.notifyTaskComment(taskId, userId),
+      `commentaire sur la tâche ${taskId}`,
+    );
+
     return comment;
   }
 
@@ -893,6 +951,11 @@ export class TacheService {
         );
       }
     }
+
+    this.notifySafely(
+      this.notifications.notifyTaskStatusChanged(taskId, dto.status, userId),
+      `changement de statut de la tâche ${taskId}`,
+    );
 
     return { ...updatedTask, nextOccurrenceId };
   }

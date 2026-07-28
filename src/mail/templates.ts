@@ -142,4 +142,38 @@ export const emailTemplates = {
       ),
     };
   },
+
+  taskAssigned({
+    firstName,
+    taskTitle,
+    projectName,
+    taskUrl,
+    assignedByName,
+    deadline,
+  }: {
+    firstName: string;
+    taskTitle: string;
+    projectName: string;
+    taskUrl: string;
+    assignedByName: string;
+    /** Échéance déjà formatée, ou null si la tâche n'en a pas. */
+    deadline: string | null;
+  }): RenderedEmail {
+    return {
+      // Le titre de la tâche dans l'objet : la boîte de réception doit
+      // suffire à savoir de quoi il s'agit, sans ouvrir le message.
+      subject: `Nouvelle tâche : ${taskTitle}`,
+      html: layout(
+        `Bonjour ${firstName}`,
+        `<p><strong>${assignedByName}</strong> vous a assigné la tâche
+          <strong>${taskTitle}</strong> dans le projet ${projectName}.</p>
+         ${deadline ? `<p>Échéance : <strong>${deadline}</strong></p>` : ''}
+         ${button(taskUrl, 'Ouvrir la tâche')}
+         ${note(
+           'Vous recevez cet email car vous êtes assigné à cette tâche. ' +
+             'Vous pouvez désactiver ces envois dans vos préférences de notification.',
+         )}`,
+      ),
+    };
+  },
 };

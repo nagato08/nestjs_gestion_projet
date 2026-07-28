@@ -3,8 +3,10 @@ import { TacheController } from './tache.controller';
 import { TacheService } from './tache.service';
 import { ChecklistService } from './checklist.service';
 import { PrismaService } from 'src/prisma.service';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [TacheController],
   providers: [TacheService, ChecklistService, PrismaService],
   exports: [TacheService, ChecklistService],

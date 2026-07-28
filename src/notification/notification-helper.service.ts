@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { MailerService } from 'src/mailer.service';
 import { NotificationService } from './notification.service';
 
 @Injectable()
 export class NotificationHelperService {
+  private readonly logger = new Logger(NotificationHelperService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
@@ -12,16 +14,32 @@ export class NotificationHelperService {
   ) {}
 
   // 1️⃣ Notifier lors de l'assignation d'une tâche
-  async notifyTaskAssigned(taskId: string, userIds: string[]) {
+  /**
+   * Seul événement doublé d'un email : se voir confier du travail mérite
+   * d'être appris sans avoir à ouvrir l'application. Les autres restent en
+   * notification interne — un email par commentaire ou par changement de
+   * statut pousserait surtout à tout désactiver.
+   *
+   * `assignedById` est exclu des destinataires : s'assigner une tâche
+   * soi-même ne doit rien déclencher.
+   */
+  async notifyTaskAssigned(
+    taskId: string,
+    userIds: string[],
+    assignedById?: string,
+  ) {
+    const recipientIds = userIds.filter((id) => id !== assignedById);
+    if (recipientIds.length === 0) return;
+
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      include: { project: { select: { name: true } } },
+      include: { project: { select: { id: true, name: true } } },
     });
 
     if (!task) return;
 
     const notifications = await Promise.all(
-      userIds.map((userId) =>
+      recipientIds.map((userId) =>
         this.notificationService.createNotification({
           type: 'TASK_ASSIGNED',
           content: `Vous avez été assigné à la tâche "${task.title}" dans le projet ${task.project.name}`,
@@ -30,7 +48,76 @@ export class NotificationHelperService {
       ),
     );
 
+    await this.sendTaskAssignedEmails(task, recipientIds, assignedById);
+
     return notifications;
+  }
+
+  /**
+   * Avis par email aux nouveaux assignés qui les acceptent.
+   *
+   * Isolé du reste et entièrement défensif : l'assignation est déjà écrite en
+   * base quand on arrive ici, une panne d'email ne doit pas la faire échouer
+   * ni masquer les notifications internes déjà créées.
+   */
+  private async sendTaskAssignedEmails(
+    task: {
+      id: string;
+      title: string;
+      deadline: Date | null;
+      project: { id: string; name: string };
+    },
+    recipientIds: string[],
+    assignedById?: string,
+  ) {
+    try {
+      const recipients = await this.prisma.user.findMany({
+        where: { id: { in: recipientIds }, deletedAt: null },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          notificationSettings: { select: { email: true } },
+        },
+      });
+
+      const author = assignedById
+        ? await this.prisma.user.findUnique({
+            where: { id: assignedById },
+            select: { firstName: true, lastName: true },
+          })
+        : null;
+
+      const assignedByName = author
+        ? `${author.firstName} ${author.lastName}`.trim()
+        : 'Un responsable du projet';
+
+      await Promise.all(
+        recipients
+          // Absence de préférence enregistrée = email actif, comme pour le
+          // temps réel : un compte jamais passé par ses réglages doit
+          // recevoir ses avis.
+          .filter((user) => user.notificationSettings[0]?.email !== false)
+          .map((user) =>
+            this.mailerService.sendTaskAssignedEmail({
+              recipient: user.email,
+              firstName: user.firstName,
+              taskTitle: task.title,
+              projectName: task.project.name,
+              projectId: task.project.id,
+              taskId: task.id,
+              assignedByName,
+              deadline: task.deadline,
+            }),
+          ),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Avis d'assignation non envoyés pour la tâche ${task.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   // 2️⃣ Notifier lors du changement de statut d'une tâche

@@ -155,4 +155,50 @@ export class MailerService {
       { critical: false },
     );
   }
+
+  /**
+   * Avis d'assignation de tâche — jamais bloquant.
+   *
+   * Une panne du fournisseur d'email ne doit pas faire échouer l'assignation
+   * elle-même : le travail est attribué en base, la notification in-app reste
+   * disponible, seul l'avis par email est perdu.
+   */
+  async sendTaskAssignedEmail({
+    recipient,
+    firstName,
+    taskTitle,
+    projectName,
+    projectId,
+    taskId,
+    assignedByName,
+    deadline,
+  }: {
+    recipient: string;
+    firstName: string;
+    taskTitle: string;
+    projectName: string;
+    projectId: string;
+    taskId: string;
+    assignedByName: string;
+    deadline: Date | null;
+  }) {
+    await this.send(
+      recipient,
+      emailTemplates.taskAssigned({
+        firstName,
+        taskTitle,
+        projectName,
+        taskUrl: `${this.frontendUrl}/projects/${projectId}/tasks/${taskId}`,
+        assignedByName,
+        deadline: deadline
+          ? deadline.toLocaleDateString('fr-FR', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })
+          : null,
+      }),
+      { critical: false },
+    );
+  }
 }
