@@ -37,6 +37,22 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     category: 'Projet',
   },
   {
+    action: 'project.restore',
+    label: 'Restauration de projet',
+    description:
+      'Un projet précédemment supprimé a été restauré depuis la corbeille, avant l’expiration de sa fenêtre de rétention.',
+    severity: 'warning',
+    category: 'Projet',
+  },
+  {
+    action: 'project.purge',
+    label: 'Purge définitive de projet',
+    description:
+      'Un projet de la corbeille a été supprimé définitivement, par anticipation ou par expiration de la fenêtre de rétention. Irréversible.',
+    severity: 'critical',
+    category: 'Projet',
+  },
+  {
     action: 'project.update',
     label: 'Modification de projet',
     description:
@@ -291,6 +307,21 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     description:
       'Un compte utilisateur a été supprimé. Ses actions passées restent tracées dans ce journal.',
     severity: 'critical',
+    category: 'Comptes',
+  },
+  {
+    action: 'user.self_delete',
+    label: 'Suppression de compte (demande RGPD)',
+    description:
+      'Un utilisateur a demandé la suppression de son propre compte au titre du droit à l’effacement.',
+    severity: 'critical',
+    category: 'Comptes',
+  },
+  {
+    action: 'user.data_export',
+    label: 'Export de données personnelles (RGPD)',
+    description: 'Un utilisateur a exporté ses propres données personnelles.',
+    severity: 'info',
     category: 'Comptes',
   },
 ];

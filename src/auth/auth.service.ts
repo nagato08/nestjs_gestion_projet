@@ -766,4 +766,150 @@ export class AuthService {
   getDepartmentEnums() {
     return Object.values(Department);
   }
+
+  /**
+   * RGPD — export des données personnelles de l'utilisateur connecté.
+   *
+   * Volontairement exclus : mot de passe (même son empreinte), jetons de
+   * réinitialisation et secret 2FA. « Vos données personnelles » ne signifie
+   * pas « vos secrets d'authentification » — les exporter serait une faille,
+   * pas une transparence.
+   *
+   * Les entités liées sont résumées (identifiants, titres, dates) plutôt que
+   * reprises intégralement : l'export porte sur ce qui concerne
+   * l'utilisateur, pas sur une copie complète de la base.
+   */
+  async exportMyData(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        avatar: true,
+        jobTitle: true,
+        department: true,
+        role: true,
+        twoFactorEnabled: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+    const [
+      projectsOwned,
+      projectMemberships,
+      taskAssignments,
+      timeEntries,
+      comments,
+      documentsUploaded,
+      chatMessages,
+      notifications,
+      auditLogs,
+    ] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { ownerId: userId },
+        select: { id: true, name: true, status: true, createdAt: true },
+      }),
+      this.prisma.projectMember.findMany({
+        where: { userId },
+        select: {
+          role: true,
+          joinedAt: true,
+          project: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.taskAssignment.findMany({
+        where: { userId },
+        select: {
+          task: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              project: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.timeEntry.findMany({
+        where: { userId },
+        select: {
+          startTime: true,
+          endTime: true,
+          duration: true,
+          task: { select: { id: true, title: true } },
+        },
+      }),
+      this.prisma.comment.findMany({
+        where: { userId },
+        select: {
+          content: true,
+          createdAt: true,
+          task: { select: { id: true, title: true } },
+        },
+      }),
+      this.prisma.document.findMany({
+        where: { uploadedBy: userId },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          project: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.chatMessage.findMany({
+        where: { senderId: userId },
+        select: {
+          content: true,
+          createdAt: true,
+          conversation: { select: { projectId: true } },
+        },
+      }),
+      this.prisma.notification.findMany({
+        where: { userId },
+        select: { type: true, content: true, isRead: true, createdAt: true },
+      }),
+      // Actions effectuées PAR l'utilisateur : lui montrer ce qu'il a fait,
+      // pas ce qu'on a fait sur lui.
+      this.prisma.auditLog.findMany({
+        where: { userId },
+        select: { action: true, targetType: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+    ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      profile: user,
+      projectsOwned,
+      projectMemberships,
+      tasksAssigned: taskAssignments.map((a) => a.task),
+      timeEntries,
+      comments,
+      documentsUploaded,
+      chatMessages,
+      notifications,
+      recentActions: auditLogs,
+    };
+  }
+
+  /**
+   * RGPD — droit à l'effacement, exercé par l'utilisateur lui-même.
+   *
+   * Réutilise `deleteUser`, déjà éprouvé côté administration : même
+   * suppression logique, même détection d'impact. La seule différence est la
+   * source de la demande — l'intéressé plutôt qu'un administrateur — la règle
+   * de fond ne change pas.
+   *
+   * Ce droit n'est pas absolu ici : un propriétaire de projets actifs ne peut
+   * pas disparaître sans laisser ces projets orphelins. `deleteUser` l'exige
+   * déjà via `reassignTo` ; le message qui en résulte reste inchangé.
+   */
+  async requestSelfDeletion(userId: string, reassignTo?: string) {
+    return this.deleteUser(userId, reassignTo);
+  }
 }

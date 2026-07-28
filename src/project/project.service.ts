@@ -430,4 +430,134 @@ export class ProjectService {
       project: deletedProject,
     };
   }
+
+  /**
+   * Fenêtre de restauration avant purge définitive.
+   *
+   * Aucun ordonnanceur n'existe dans ce projet (`@nestjs/schedule` absent) :
+   * la purge n'est donc pas un cron, mais un balayage effectué à chaque
+   * consultation de la corbeille (11️⃣). C'est suffisant ici — la corbeille
+   * n'a d'utilité que consultée — et ça évite une dépendance à un
+   * ordonnanceur pour une seule fonctionnalité.
+   */
+  private static readonly TRASH_RETENTION_DAYS = 30;
+
+  /**
+   * Supprime définitivement les projets dont la fenêtre de restauration est
+   * dépassée. La cascade Prisma (`onDelete: Cascade`) entraîne tâches,
+   * documents, membres, sprints et jalons : aucun nettoyage manuel requis.
+   */
+  private async purgeExpiredProjects(): Promise<void> {
+    const threshold = new Date();
+    threshold.setDate(
+      threshold.getDate() - ProjectService.TRASH_RETENTION_DAYS,
+    );
+
+    await this.prisma.project.deleteMany({
+      where: { deletedAt: { lt: threshold } },
+    });
+  }
+
+  /**
+   * 1️⃣1️⃣ Corbeille : projets supprimés encore dans leur fenêtre de restauration.
+   *
+   * Un propriétaire de projet (PROJECT_MANAGER ou ADMIN global) n'y voit que
+   * ses propres projets. Un ADMIN global, déjà traité comme OWNER de tout
+   * projet par le service d'accès, y voit l'ensemble — cohérent avec son
+   * rôle de supervision plutôt qu'une exception ad hoc.
+   */
+  async getTrashedProjects(userId: string) {
+    await this.purgeExpiredProjects();
+
+    const isGlobalAdmin = await this.projectAccess.isGlobalAdmin(userId);
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        deletedAt: { not: null },
+        ...(isGlobalAdmin ? {} : { ownerId: userId }),
+      },
+      orderBy: { deletedAt: 'desc' },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true } },
+        _count: { select: { tasks: true, members: true, documents: true } },
+      },
+    });
+
+    const retentionMs =
+      ProjectService.TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+    return projects.map((project) => ({
+      ...project,
+      // Jours restants avant purge définitive : c'est cette information,
+      // pas la date brute, qui donne l'urgence à l'utilisateur.
+      daysUntilPurge: Math.max(
+        0,
+        Math.ceil(
+          (project.deletedAt!.getTime() + retentionMs - Date.now()) /
+            (24 * 60 * 60 * 1000),
+        ),
+      ),
+    }));
+  }
+
+  /**
+   * 1️⃣2️⃣ Restaure un projet supprimé.
+   *
+   * Ne peut pas réutiliser `projectAccess.requireOwner` : celui-ci résout le
+   * rôle via `getEffectiveRole`, qui filtre `deletedAt: null` et lèverait
+   * NotFound sur un projet précisément supprimé. La vérification se fait
+   * donc directement ici, sur le projet supprimé lui-même.
+   */
+  async restoreProject(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, ownerId: true, deletedAt: true, name: true },
+    });
+
+    if (!project || !project.deletedAt) {
+      throw new NotFoundException('Aucun projet supprimé avec cet identifiant');
+    }
+
+    const isGlobalAdmin = await this.projectAccess.isGlobalAdmin(userId);
+    if (project.ownerId !== userId && !isGlobalAdmin) {
+      throw new ForbiddenException(
+        'Seul le propriétaire du projet peut le restaurer',
+      );
+    }
+
+    const restored = await this.prisma.project.update({
+      where: { id: projectId },
+      data: { deletedAt: null },
+    });
+
+    return { message: `Projet "${restored.name}" restauré`, project: restored };
+  }
+
+  /**
+   * 1️⃣3️⃣ Purge définitive anticipée, à la demande du propriétaire.
+   *
+   * Distincte de la purge automatique : celle-ci agit sur un seul projet,
+   * immédiatement, sans attendre la fin de la fenêtre de rétention.
+   */
+  async purgeProjectNow(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, ownerId: true, deletedAt: true, name: true },
+    });
+
+    if (!project || !project.deletedAt) {
+      throw new NotFoundException('Aucun projet supprimé avec cet identifiant');
+    }
+
+    const isGlobalAdmin = await this.projectAccess.isGlobalAdmin(userId);
+    if (project.ownerId !== userId && !isGlobalAdmin) {
+      throw new ForbiddenException(
+        'Seul le propriétaire du projet peut le supprimer définitivement',
+      );
+    }
+
+    await this.prisma.project.delete({ where: { id: projectId } });
+
+    return { message: `Projet "${project.name}" supprimé définitivement` };
+  }
 }

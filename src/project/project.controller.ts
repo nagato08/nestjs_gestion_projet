@@ -50,6 +50,17 @@ export class ProjectController {
     return this.projectService.getMyProjects(req.user.id);
   }
 
+  // Doit être déclarée avant `:id` : sinon `GET /projects/trash` serait
+  // capturé comme une recherche du projet d'identifiant littéral « trash ».
+  @Get('trash')
+  @ApiOperation({
+    summary:
+      'Corbeille : projets supprimés, visibles par leur propriétaire (ou tous pour un ADMIN global)',
+  })
+  findTrashedProjects(@Req() req: any) {
+    return this.projectService.getTrashedProjects(req.user.id);
+  }
+
   // 3. TOUT LE MONDE PEUT VOIR UN PROJET (le service vérifiera s'il est membre)
   @Get(':id')
   @ApiOperation({ summary: 'Détails d’un projet spécifique' })
@@ -269,5 +280,24 @@ export class ProjectController {
   })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.projectService.deleteProject(id, req.user.id);
+  }
+
+  @Post(':id/restore')
+  @Audit({ action: 'project.restore', targetType: 'Project' })
+  @ApiOperation({
+    summary: 'Restaurer un projet supprimé (propriétaire ou ADMIN global)',
+  })
+  restore(@Param('id') id: string, @Req() req: any) {
+    return this.projectService.restoreProject(id, req.user.id);
+  }
+
+  @Delete(':id/purge')
+  @Audit({ action: 'project.purge', targetType: 'Project' })
+  @ApiOperation({
+    summary:
+      'Supprimer définitivement un projet déjà dans la corbeille, avant la fin de la fenêtre de rétention',
+  })
+  purge(@Param('id') id: string, @Req() req: any) {
+    return this.projectService.purgeProjectNow(id, req.user.id);
   }
 }

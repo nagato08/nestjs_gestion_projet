@@ -172,6 +172,36 @@ export class AuthController {
     return this.authService.uploadAvatar(req.user.sub, file);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('profile/export')
+  @Audit({ action: 'user.data_export', targetType: 'User' })
+  @ApiOperation({
+    summary: 'RGPD — exporter mes données personnelles (format JSON)',
+  })
+  async exportMyData(@Request() req: any) {
+    return this.authService.exportMyData(req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('profile')
+  @Audit({
+    action: 'user.self_delete',
+    targetType: 'User',
+    metadata: (req) => ({
+      reassignTo: (req.body as { reassignTo?: string })?.reassignTo,
+    }),
+  })
+  @ApiOperation({
+    summary:
+      'RGPD — demander la suppression de mon compte (nécessite un remplaçant si je possède des projets)',
+  })
+  async deleteMyAccount(
+    @Request() req: any,
+    @Body() body?: { reassignTo?: string },
+  ) {
+    return this.authService.requestSelfDeletion(req.user.sub, body?.reassignTo);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.PROJECT_MANAGER)
   @Get('users')

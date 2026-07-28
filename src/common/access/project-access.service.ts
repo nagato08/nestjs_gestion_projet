@@ -218,7 +218,7 @@ export class ProjectAccessService {
   }
 
   /** True si l'utilisateur a le rôle global ADMIN. */
-  private async isGlobalAdmin(userId: string): Promise<boolean> {
+  async isGlobalAdmin(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
