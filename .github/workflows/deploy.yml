@@ -10,7 +10,10 @@ env:
 
 jobs:
   # ───────────────────────────────
-  # 1. Qualité : lint + build check
+  # 1. Qualité : lint + typecheck + tests + build
+  #
+  # Bloquant : build-push dépend de ce job, rien ne part en production si
+  # l'une de ces étapes échoue.
   # ───────────────────────────────
   quality:
     runs-on: ubuntu-latest
@@ -26,8 +29,27 @@ jobs:
 
       - run: npx prisma generate
 
+      # `lint:ci` et non `lint` : ce dernier corrige en place, or le pipeline
+      # doit constater l'état du dépôt et non le réécrire.
       - name: Lint
-        run: npm run lint
+        run: npm run lint:ci
+
+      - name: Vérification des types
+        run: npm run typecheck
+
+      - name: Tests unitaires
+        run: npm run test:cov
+
+      - name: Tests d'intégration HTTP
+        run: npm run test:e2e
+
+      - name: Rapport de couverture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: couverture
+          path: coverage/
+          retention-days: 14
 
       - name: Build check
         run: npm run build
