@@ -54,7 +54,7 @@ import { HealthController } from './health/health.controller';
     PrismaService,
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- provider Nest
+
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

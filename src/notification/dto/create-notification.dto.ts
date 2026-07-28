@@ -12,6 +12,7 @@ export class CreateNotificationDto {
       'DOCUMENT_COMMENT',
       'PROJECT_MESSAGE',
       'PROJECT_MEMBER_ADDED',
+      'CHAT_MENTION',
       'DEADLINE_APPROACHING',
       'DEADLINE_PASSED',
     ],

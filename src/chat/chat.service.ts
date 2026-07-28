@@ -1,9 +1,67 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { SocketService } from 'src/socket/socket.service';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
+import { NotificationService } from 'src/notification/notification.service';
+
+/** Métadonnées d'un fichier joint, telles que fournies à la création. */
+export interface ChatAttachmentInput {
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+}
+
+/**
+ * Champs remontés pour un message. Défini une fois et réutilisé par l'envoi
+ * et la lecture : les deux doivent renvoyer exactement la même forme, sinon
+ * le message qui apparaît en direct diffère de celui rechargé.
+ */
+const CHAT_MESSAGE_SELECT = {
+  id: true,
+  content: true,
+  createdAt: true,
+  senderId: true,
+  mentions: true,
+  sender: {
+    select: { id: true, firstName: true, lastName: true, avatar: true },
+  },
+  attachments: {
+    select: { id: true, name: true, url: true, size: true, mimeType: true },
+  },
+} as const;
+
+export interface ChatMessageRow {
+  id: string;
+  content: string;
+  createdAt: Date;
+  senderId: string;
+  mentions: string[];
+  sender: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatar: string | null;
+  };
+  attachments: {
+    id: string;
+    name: string;
+    url: string;
+    size: number;
+    mimeType: string;
+  }[];
+}
+
+export interface ChatMessagePayload {
+  id: string;
+  content: string;
+  createdAt: Date;
+  projectId: string;
+  userId: string;
+  user: ChatMessageRow['sender'];
+  mentions: string[];
+  attachments: ChatMessageRow['attachments'];
+}
 
 @Injectable()
 export class ChatService {
@@ -11,6 +69,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /** Lecture du chat : tout membre du projet, VIEWER compris. */
@@ -37,12 +96,20 @@ export class ChatService {
     projectId,
     content,
     senderId,
+    mentions = [],
+    attachments = [],
   }: {
     projectId: string;
     content: string;
     senderId: string;
+    mentions?: string[];
+    attachments?: ChatAttachmentInput[];
   }) {
     await this.ensureProjectContributor(projectId, senderId);
+
+    // On ne notifie que des membres réels du projet : une mention fabriquée
+    // côté client ne doit pas permettre d'alerter n'importe quel compte.
+    const validMentions = await this.filterProjectMembers(projectId, mentions);
 
     let conversation = await this.prisma.conversation.findUnique({
       where: { projectId },
@@ -53,55 +120,121 @@ export class ChatService {
       });
     }
 
-    const updated = await this.prisma.conversation.update({
-      where: { id: conversation.id },
+    const message = await this.prisma.chatMessage.create({
       data: {
-        messages: {
-          create: {
-            content,
-            senderId,
-          },
-        },
+        content,
+        senderId,
+        conversationId: conversation.id,
+        mentions: validMentions,
+        attachments: attachments.length ? { create: attachments } : undefined,
       },
-      select: {
-        id: true,
-        projectId: true,
-        messages: {
-          select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            senderId: true,
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
+      select: CHAT_MESSAGE_SELECT,
     });
 
-    const raw = (updated as { messages: typeof updated.messages }).messages[0];
-    const lastMessage = raw
-      ? { ...raw, userId: raw.senderId, user: raw.sender, projectId }
-      : null;
+    const payload = this.toPayload(message, projectId);
 
-    if (this.socketService.server && lastMessage) {
+    if (this.socketService.server) {
       this.socketService.server
         .to(`project:${projectId}`)
-        .emit('message:new', lastMessage);
+        .emit('message:new', payload);
+
+      // Notification ciblée pour chaque personne mentionnée, en plus du
+      // message diffusé à la room : elle peut ne pas avoir le chat ouvert.
+      for (const userId of validMentions) {
+        if (userId === senderId) continue;
+        this.socketService.server
+          .to(`user:${userId}`)
+          .emit('chat:mentioned', payload);
+      }
     }
+
+    // Notification persistante (cloche) pour les mentionnés absents.
+    void this.notifyMentions({
+      mentions: validMentions,
+      senderId,
+      projectId,
+      content,
+    });
 
     return {
       error: false,
       message: 'Message envoyé.',
-      data: lastMessage,
+      data: payload,
+    };
+  }
+
+  /** Ne conserve que les identifiants réellement membres du projet. */
+  private async filterProjectMembers(
+    projectId: string,
+    userIds: string[],
+  ): Promise<string[]> {
+    const unique = [...new Set(userIds)].filter(Boolean);
+    if (unique.length === 0) return [];
+
+    const members = await this.prisma.projectMember.findMany({
+      where: { projectId, userId: { in: unique } },
+      select: { userId: true },
+    });
+
+    return members.map((m) => m.userId);
+  }
+
+  /** Notification persistante pour chaque personne mentionnée. */
+  private async notifyMentions({
+    mentions,
+    senderId,
+    projectId,
+    content,
+  }: {
+    mentions: string[];
+    senderId: string;
+    projectId: string;
+    content: string;
+  }): Promise<void> {
+    const targets = mentions.filter((id) => id !== senderId);
+    if (targets.length === 0) return;
+
+    const [sender, project] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: senderId },
+        select: { firstName: true, lastName: true },
+      }),
+      this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { name: true },
+      }),
+    ]);
+
+    const senderName = sender
+      ? `${sender.firstName} ${sender.lastName}`
+      : 'Quelqu’un';
+    const extract = content.length > 80 ? `${content.slice(0, 80)}…` : content;
+
+    await Promise.all(
+      targets.map((userId) =>
+        this.notificationService.createNotification({
+          type: 'CHAT_MENTION',
+          content: `${senderName} vous a mentionné dans ${project?.name ?? 'un projet'} : « ${extract} »`,
+          userId,
+        }),
+      ),
+    );
+  }
+
+  /** Forme attendue par le front : `userId`/`user` plutôt que `senderId`/`sender`. */
+  private toPayload(
+    message: ChatMessageRow,
+    projectId: string,
+  ): ChatMessagePayload {
+    return {
+      id: message.id,
+      content: message.content,
+      createdAt: message.createdAt,
+      projectId,
+      userId: message.senderId,
+      user: message.sender,
+      mentions: message.mentions,
+      attachments: message.attachments,
     };
   }
 
@@ -124,20 +257,7 @@ export class ChatService {
         projectId: true,
         updatedAt: true,
         messages: {
-          select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            senderId: true,
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-          },
+          select: CHAT_MESSAGE_SELECT,
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -149,14 +269,9 @@ export class ChatService {
 
     return {
       ...conversation,
-      messages: conversation.messages.map((msg) => ({
-        id: msg.id,
-        content: msg.content,
-        createdAt: msg.createdAt,
-        projectId,
-        userId: msg.senderId,
-        user: msg.sender,
-      })),
+      messages: conversation.messages.map((msg) =>
+        this.toPayload(msg, projectId),
+      ),
     };
   }
 }

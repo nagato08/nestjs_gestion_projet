@@ -76,6 +76,22 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     category: 'Membres',
   },
   {
+    action: 'project.invite.revoke',
+    label: 'Invitation révoquée',
+    description:
+      'Une invitation en attente a été annulée : le lien envoyé ne fonctionne plus.',
+    severity: 'warning',
+    category: 'Membres',
+  },
+  {
+    action: 'project.invite.accept',
+    label: 'Invitation acceptée',
+    description:
+      'Un invité a rejoint le projet via son lien nominatif, avec le rôle prévu à l’invitation.',
+    severity: 'info',
+    category: 'Membres',
+  },
+  {
     action: 'project.member.join',
     label: 'Adhésion au projet',
     description:

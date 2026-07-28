@@ -12,6 +12,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ProjectService } from './project.service';
+import { InvitationService } from './invitation.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
@@ -29,7 +30,10 @@ import { Audit } from 'src/common/audit/audit.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard) // On garde les Guards ici (Jwt vérifie l'identité, RolesGuard vérifie les permissions)
 @Controller('projects')
 export class ProjectController {
-  constructor(private readonly projectService: ProjectService) {}
+  constructor(
+    private readonly projectService: ProjectService,
+    private readonly invitationService: InvitationService,
+  ) {}
 
   // 1. SEULS ADMIN ET PM PEUVENT CRÉER
   @Post()
@@ -101,22 +105,46 @@ export class ProjectController {
     targetType: 'Project',
     metadata: (req) => ({
       email: (req.body as InviteProjectMemberDto)?.email,
+      role: (req.body as InviteProjectMemberDto)?.role ?? 'MEMBER',
     }),
   })
   @ApiOperation({
     summary:
-      'Inviter par email (propriétaire ou administrateur du projet) — envoie le lien d’invitation',
+      'Inviter par email (propriétaire ou administrateur du projet) — crée une invitation nominative',
   })
   inviteMember(
     @Param('id') id: string,
     @Req() req: any,
-    @Body() inviteProjectMemberDto: InviteProjectMemberDto,
+    @Body() dto: InviteProjectMemberDto,
   ) {
-    return this.projectService.inviteMemberByEmail(
-      id,
-      req.user.id,
-      inviteProjectMemberDto,
-    );
+    return this.invitationService.invite(id, req.user.id, dto.email, dto.role);
+  }
+
+  @Get(':id/invitations')
+  @ApiOperation({
+    summary: 'Lister les invitations du projet (ADMIN projet)',
+  })
+  listInvitations(@Param('id') id: string, @Req() req: any) {
+    return this.invitationService.list(id, req.user.id);
+  }
+
+  @Delete(':id/invitations/:invitationId')
+  @Audit({
+    action: 'project.invite.revoke',
+    targetType: 'Project',
+    metadata: (req) => ({
+      invitationId: (req.params as Record<string, string>)?.invitationId,
+    }),
+  })
+  @ApiOperation({
+    summary: 'Révoquer une invitation en attente (ADMIN projet)',
+  })
+  revokeInvitation(
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+    @Req() req: any,
+  ) {
+    return this.invitationService.revoke(id, invitationId, req.user.id);
   }
 
   @Delete(':id/members')
@@ -208,9 +236,23 @@ export class ProjectController {
     targetId: (_req, result) => (result as { projectId?: string })?.projectId,
     metadata: () => ({ method: 'token' }),
   })
-  @ApiOperation({ summary: 'Rejoindre via token' })
+  @ApiOperation({ summary: 'Rejoindre via le lien partagé du projet' })
   joinByToken(@Body('inviteToken') inviteToken: string, @Req() req: any) {
     return this.projectService.joinByInviteToken(inviteToken, req.user.id);
+  }
+
+  @Post('invitations/accept')
+  @Audit({
+    action: 'project.invite.accept',
+    targetType: 'Project',
+    targetId: (_req, result) => (result as { projectId?: string })?.projectId,
+  })
+  @ApiOperation({
+    summary:
+      'Accepter une invitation nominative — l’email du compte doit correspondre à celui invité',
+  })
+  acceptInvitation(@Body('token') token: string, @Req() req: any) {
+    return this.invitationService.accept(token, req.user.id);
   }
 
   @Patch(':id/regenerate-token')

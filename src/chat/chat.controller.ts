@@ -31,6 +31,8 @@ export class ChatController {
       projectId,
       content: dto.content,
       senderId: request.user.id,
+      mentions: dto.mentions,
+      attachments: dto.attachments,
     });
   }
 

@@ -299,7 +299,18 @@ curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID/regenerate-token \
 
 ---
 
-### 9 bis. Inviter par email (ADMIN projet)
+### 9 bis. Invitations nominatives
+
+Distinctes du **lien partagé** du projet (`inviteToken`, section 8) : chaque
+invitation porte un token propre, **lié à une adresse email**, qui expire au
+bout de 7 jours et se révoque individuellement. Transférer l'email ne suffit
+pas à entrer : à l'acceptation, le serveur vérifie que l'adresse du compte
+connecté correspond à celle invitée.
+
+Le token en clair n'existe que dans l'email — la base n'en stocke que le
+hash SHA-256.
+
+#### Envoyer une invitation
 
 | Élément | Valeur                  |
 | ------- | ----------------------- |
@@ -307,25 +318,41 @@ curl -s -X PATCH http://localhost:4000/projects/PROJECT_ID/regenerate-token \
 | URL     | `/projects/:id/invite`  |
 | Auth    | Oui + **ADMIN projet**  |
 
-**Body (JSON)** : `email`.
-
-N'ajoute **aucun membre immédiatement** : le projet n'a qu'un seul token
-d'invitation partagé, l'endpoint se contente de l'envoyer par email plutôt que
-de le faire copier-coller manuellement. Le destinataire peut ne pas encore
-avoir de compte — le lien `/invite/:token` du front le guide vers
-l'inscription puis rejoint automatiquement le projet.
-
-**Exemple curl :**
+**Body (JSON)** : `email`, `role` optionnel (`ADMIN`, `MEMBER` par défaut,
+`VIEWER`). `OWNER` est refusé.
 
 ```bash
 curl -s -X POST http://localhost:4000/projects/PROJECT_ID/invite \
   -H "Authorization: Bearer VOTRE_JWT" \
   -H "Content-Type: application/json" \
-  -d '{"email": "collegue@exemple.fr"}'
+  -d '{"email": "collegue@exemple.fr", "role": "MEMBER"}'
 ```
 
-**À vérifier :** email reçu (template Resend), 409 si la personne est déjà
-membre, 403 si `MEMBER`/`VIEWER`.
+**À vérifier :** email reçu, 409 si déjà membre, 403 si `MEMBER`/`VIEWER`,
+403 si le rôle demandé est ≥ au sien. Une seconde invitation à la même
+adresse **révoque automatiquement** la précédente.
+
+#### Consulter une invitation (public, sans JWT)
+
+`GET /invitations/:token` → `{ projectName, email, status, expiresAt, isExpired }`
+
+Permet à la page d'atterrissage d'annoncer le projet et l'adresse attendue
+avant même que le visiteur ait un compte.
+
+#### Accepter
+
+`POST /projects/invitations/accept`, body `{ "token": "..." }`, JWT requis.
+
+**À vérifier :** 403 si l'email du compte diffère de celui invité, 403 si
+expirée ou révoquée, 409 si déjà utilisée ou déjà membre. En cas de succès,
+le membre est créé avec le rôle prévu **et** l'invitation passe `ACCEPTED`
+dans la même transaction.
+
+#### Lister / révoquer
+
+- `GET /projects/:id/invitations` (ADMIN projet)
+- `DELETE /projects/:id/invitations/:invitationId` (ADMIN projet) — 409 si
+  l'invitation n'est pas en attente.
 
 ---
 

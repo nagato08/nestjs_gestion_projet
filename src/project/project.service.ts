@@ -18,9 +18,7 @@ import {
   ProjectAccessService,
 } from 'src/common/access/project-access.service';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
-import { InviteProjectMemberDto } from './dto/invite-project-member.dto';
 import { NotificationHelperService } from 'src/notification/notification-helper.service';
-import { MailerService } from 'src/mailer.service';
 
 @Injectable()
 export class ProjectService {
@@ -28,7 +26,6 @@ export class ProjectService {
     private readonly prisma: PrismaService,
     private readonly projectAccess: ProjectAccessService,
     private readonly notificationHelper: NotificationHelperService,
-    private readonly mailerService: MailerService,
   ) {}
 
   // 1️⃣ Créer un projet (Transactionnel : Projet + Premier Membre)
@@ -227,58 +224,6 @@ export class ProjectService {
     this.assertCanAssignRole(actorRole, role);
 
     return this.addMemberToProject(projectId, dto.userId, role);
-  }
-
-  /**
-   * Invite par email : envoie le lien d'invitation existant (le même que
-   * "copier le lien" dans les paramètres) à l'adresse indiquée.
-   *
-   * Le projet n'a qu'un seul token partagé, pas un token par invité : on ne
-   * crée donc aucun état nouveau, on se contente de pousser le lien par email
-   * plutôt que de le faire copier-coller manuellement. Le destinataire peut
-   * ne pas encore avoir de compte : le lien le guide vers l'inscription.
-   */
-  async inviteMemberByEmail(
-    projectId: string,
-    actorId: string,
-    dto: InviteProjectMemberDto,
-  ) {
-    await this.projectAccess.requireManager(projectId, actorId);
-
-    const [project, actor, existingUser] = await Promise.all([
-      this.prisma.project.findUniqueOrThrow({
-        where: { id: projectId },
-        select: { name: true, inviteToken: true },
-      }),
-      this.prisma.user.findUniqueOrThrow({
-        where: { id: actorId },
-        select: { firstName: true, lastName: true },
-      }),
-      this.prisma.user.findUnique({
-        where: { email: dto.email },
-        select: { id: true },
-      }),
-    ]);
-
-    if (existingUser) {
-      const alreadyMember = await this.prisma.projectMember.findUnique({
-        where: {
-          projectId_userId: { projectId, userId: existingUser.id },
-        },
-      });
-      if (alreadyMember) {
-        throw new ConflictException('Cette personne est déjà membre du projet');
-      }
-    }
-
-    await this.mailerService.sendProjectInviteEmail({
-      recipient: dto.email,
-      projectName: project.name,
-      inviterName: `${actor.firstName} ${actor.lastName}`,
-      inviteToken: project.inviteToken,
-    });
-
-    return { message: 'Invitation envoyée', email: dto.email };
   }
 
   async joinByProjectCode(projectCode: string, userId: string) {

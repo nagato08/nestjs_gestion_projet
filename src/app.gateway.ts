@@ -5,6 +5,7 @@ import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
@@ -37,9 +38,22 @@ type AuthSocket = Socket<
   namespace: '/',
 })
 export class AppGateway
-  implements OnGatewayInit, OnGatewayConnection, OnModuleInit
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleInit
 {
   private readonly logger = new Logger(AppGateway.name);
+
+  /**
+   * Sockets ouvertes par utilisateur.
+   *
+   * Un même compte peut avoir plusieurs onglets ou appareils : on compte les
+   * connexions plutôt que de stocker un booléen, sinon fermer un onglet
+   * ferait apparaître l'utilisateur hors ligne alors qu'il est toujours là.
+   */
+  private readonly onlineUsers = new Map<string, Set<string>>();
 
   @WebSocketServer()
   private readonly server!: Server;
@@ -82,11 +96,61 @@ export class AppGateway
       socket.data.userId = payload.sub;
       // Room personnelle : les notifications n'exigent plus d'événement client.
       socket.join(`user:${payload.sub}`);
+      this.markOnline(payload.sub, socket.id);
     } catch {
       this.logger.warn('Connexion WebSocket avec jeton invalide : rejetée');
       socket.emit('error', { message: 'Jeton invalide ou expiré' });
       socket.disconnect(true);
     }
+  }
+
+  handleDisconnect(socket: AuthSocket) {
+    const userId = this.getUserId(socket);
+    if (userId) this.markOffline(userId, socket.id);
+  }
+
+  /**
+   * Enregistre une connexion et annonce l'arrivée si c'est la première.
+   * Les connexions suivantes du même compte ne rediffusent rien.
+   */
+  private markOnline(userId: string, socketId: string) {
+    const sockets = this.onlineUsers.get(userId) ?? new Set<string>();
+    const wasOffline = sockets.size === 0;
+    sockets.add(socketId);
+    this.onlineUsers.set(userId, sockets);
+
+    if (wasOffline) {
+      this.server.emit('presence:online', { userId });
+    }
+  }
+
+  /** Retire une connexion ; l'utilisateur passe hors ligne à la dernière. */
+  private markOffline(userId: string, socketId: string) {
+    const sockets = this.onlineUsers.get(userId);
+    if (!sockets) return;
+
+    sockets.delete(socketId);
+
+    if (sockets.size === 0) {
+      this.onlineUsers.delete(userId);
+      this.server.emit('presence:offline', { userId });
+    }
+  }
+
+  /** Liste des utilisateurs actuellement connectés. */
+  private getOnlineUserIds(): string[] {
+    return [...this.onlineUsers.keys()];
+  }
+
+  /**
+   * Instantané de présence, demandé à l'ouverture d'une page : les événements
+   * `presence:online` ne couvrent que les changements postérieurs à la
+   * connexion, il faut donc un état initial.
+   */
+  @SubscribeMessage('presence:list')
+  async listPresence(@ConnectedSocket() socket: AuthSocket) {
+    if (!this.getUserId(socket)) return;
+    socket.emit('presence:list', { userIds: this.getOnlineUserIds() });
   }
 
   /**

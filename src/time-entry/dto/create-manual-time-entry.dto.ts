@@ -19,10 +19,7 @@ export class CreateManualTimeEntryDto {
     description: 'Date et heure de début',
   })
   @IsNotEmpty({ message: "L'heure de début est requise" })
-  @IsDateString(
-    {},
-    { message: "Heure de début invalide (format ISO attendu)" },
-  )
+  @IsDateString({}, { message: 'Heure de début invalide (format ISO attendu)' })
   startTime: string;
 
   @ApiProperty({
