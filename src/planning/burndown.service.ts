@@ -81,11 +81,9 @@ export class BurndownService {
       storyPoints: number | null;
       status: TaskStatus;
       createdAt: Date;
-      updatedAt: Date;
+      completedAt: Date | null;
     };
-    // select includes storyPoints; cast needed until Prisma client is regenerated
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- result cast to BurndownTaskRow[] */
-    const tasks = (await this.prisma.task.findMany({
+    const tasks: BurndownTaskRow[] = await this.prisma.task.findMany({
       // Avec un sprint, le périmètre est celui du sprint et non tout le
       // projet — c'est ce qui distingue un burndown d'itération d'une courbe
       // d'avancement global.
@@ -99,10 +97,9 @@ export class BurndownService {
         storyPoints: true,
         status: true,
         createdAt: true,
-        updatedAt: true,
-      } as any,
-    })) as unknown as BurndownTaskRow[];
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+        completedAt: true,
+      },
+    });
 
     const useStoryPoints = tasks.some(
       (t) => t.storyPoints != null && t.storyPoints > 0,
@@ -121,6 +118,12 @@ export class BurndownService {
       const dateStr = date.toISOString().split('T')[0];
       dates.push(dateStr);
 
+      // Borne haute du jour : un burndown lit « ce qu'il restait le soir du
+      // jour J ». Comparer au petit matin repousserait au lendemain toute
+      // tâche terminée dans la journée.
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
       const idealRemaining = totalWork - (totalWork * d) / totalDays;
       ideal.push(Math.max(0, Math.round(idealRemaining * 10) / 10));
 
@@ -128,14 +131,12 @@ export class BurndownService {
       if (useStoryPoints) {
         remaining = tasks
           .filter((t) => {
-            const doneAt = t.status === TaskStatus.DONE ? t.updatedAt : null;
-            return !doneAt || doneAt > date;
+            return !t.completedAt || t.completedAt > endOfDay;
           })
           .reduce((s, t) => s + (t.storyPoints ?? 0), 0);
       } else {
         remaining = tasks.filter((t) => {
-          const doneAt = t.status === TaskStatus.DONE ? t.updatedAt : null;
-          return !doneAt || doneAt > date;
+          return !t.completedAt || t.completedAt > endOfDay;
         }).length;
       }
       actual.push(remaining);

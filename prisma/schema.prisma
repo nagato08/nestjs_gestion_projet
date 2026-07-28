@@ -285,6 +285,13 @@ model Task {
   status      TaskStatus @default(TODO)
   deadline    DateTime?
 
+  // Instant du passage en DONE, figé une fois pour toutes.
+  //
+  // Le burndown s'appuyait sur updatedAt, qui bouge à chaque modification :
+  // renommer une tâche terminée déplaçait sa date de complétion et réécrivait
+  // l'historique de la courbe. Remis à null si la tâche ressort de DONE.
+  completedAt DateTime?
+
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -335,6 +342,7 @@ model Task {
 
   @@index([sprintId])
   @@index([recurrenceOfId])
+  @@index([completedAt])
 }
 
 /// Élément de liste de contrôle dans une tâche.

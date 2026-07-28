@@ -82,6 +82,26 @@ export class TacheService {
   }
 
   /**
+   * UTILITAIRE : Champs à écrire pour garder `completedAt` cohérent avec le
+   * statut.
+   *
+   * Ne renvoie rien tant que la tâche ne franchit pas la frontière du DONE :
+   * réécrire la date à chaque sauvegarde d'une tâche déjà terminée
+   * reproduirait exactement le défaut que ce champ corrige, à savoir un
+   * historique de burndown qui se réécrit rétroactivement.
+   */
+  private completionPatch(
+    previous: TaskStatus,
+    next: TaskStatus | undefined,
+  ): { completedAt?: Date | null } {
+    if (next === undefined || next === previous) return {};
+    if (next === TaskStatus.DONE) return { completedAt: new Date() };
+    // La tâche ressort de DONE : elle n'a plus de date de complétion.
+    if (previous === TaskStatus.DONE) return { completedAt: null };
+    return {};
+  }
+
+  /**
    * UTILITAIRE : Participation à la discussion d'une tâche — MEMBER minimum,
    * sans exigence d'assignation. Commenter reste ouvert à toute l'équipe :
    * c'est de la collaboration, pas une modification du travail d'autrui.
@@ -425,6 +445,19 @@ export class TacheService {
     }
     if (dto.storyPoints !== undefined) {
       updateData.storyPoints = dto.storyPoints;
+    }
+
+    // Le statut est modifiable par cette route aussi : completedAt doit y
+    // suivre la meme regle que dans changeTaskStatus.
+    if (dto.status !== undefined) {
+      const before = await this.prisma.task.findUniqueOrThrow({
+        where: { id: taskId },
+        select: { status: true },
+      });
+      Object.assign(
+        updateData,
+        this.completionPatch(before.status, dto.status),
+      );
     }
 
     const updatedTask = await this.prisma.task.update({
@@ -799,9 +832,19 @@ export class TacheService {
     }
 
     const updatedTask = await this.prisma.$transaction(async (tx) => {
+      // Statut lu dans la transaction : le calcul de completedAt en depend,
+      // et une lecture hors transaction laisserait une fenetre de course.
+      const before = await tx.task.findUniqueOrThrow({
+        where: { id: taskId },
+        select: { status: true },
+      });
+
       const updated = await tx.task.update({
         where: { id: taskId },
-        data: { status: dto.status },
+        data: {
+          status: dto.status,
+          ...this.completionPatch(before.status, dto.status),
+        },
         include: {
           assignments: {
             include: {
