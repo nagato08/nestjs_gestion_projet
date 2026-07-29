@@ -299,6 +299,28 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     severity: 'warning',
     category: 'Planning',
   },
+  {
+    action: 'phase.create',
+    label: 'Création de phase',
+    description:
+      'Une phase macro (conception, recette, déploiement…) a été ajoutée à la feuille de route.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'phase.update',
+    label: 'Modification de phase',
+    description: 'Le nom, les dates ou l’ordre d’une phase ont été modifiés.',
+    severity: 'info',
+    category: 'Planning',
+  },
+  {
+    action: 'phase.delete',
+    label: 'Suppression de phase',
+    description: 'Une phase a été retirée de la feuille de route.',
+    severity: 'warning',
+    category: 'Planning',
+  },
 
   // --- Comptes ---
   {

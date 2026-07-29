@@ -193,6 +193,7 @@ model Project {
   conversation Conversation?
   invitations  ProjectInvitation[]
   settings     ProjectSettings?
+  phases       Phase[]
   sprints      Sprint[]
   milestones   Milestone[]
 
@@ -560,6 +561,33 @@ enum ProjectMethodology {
 enum ChargeUnit {
   HOURS
   PERSON_DAYS
+}
+
+/// Regroupement macro d'un projet — une phase (« conception », « recette »,
+/// « déploiement »…), distincte des tâches individuelles du Gantt.
+///
+/// Sert la feuille de route : une vue à hauteur de chef de projet, qui
+/// montre la structure d'ensemble sans le détail de chaque tâche.
+model Phase {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+
+  /// Ordre d'affichage explicite plutôt que déduit des dates : deux phases
+  /// qui se chevauchent (ex. recette qui démarre avant la fin du
+  /// développement) doivent quand même s'afficher dans un ordre stable.
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model TaskAssignment {

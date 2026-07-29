@@ -21,10 +21,13 @@ import { WorkloadService } from './workload.service';
 import { ScheduleService } from './schedule.service';
 import { SprintService } from './sprint.service';
 import { MilestoneService } from './milestone.service';
+import { PhaseService } from './phase.service';
 import { CreateSprintDto } from './dto/create-sprint.dto';
 import { UpdateSprintDto } from './dto/update-sprint.dto';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
+import { CreatePhaseDto } from './dto/create-phase.dto';
+import { UpdatePhaseDto } from './dto/update-phase.dto';
 import { RescheduleTaskDto } from './dto/reschedule-task.dto';
 import { AssignSprintTasksDto } from './dto/assign-sprint-tasks.dto';
 
@@ -42,6 +45,7 @@ export class PlanningController {
     private readonly scheduleService: ScheduleService,
     private readonly sprintService: SprintService,
     private readonly milestoneService: MilestoneService,
+    private readonly phaseService: PhaseService,
   ) {}
 
   // ---------------------------------------------------------------
@@ -251,6 +255,67 @@ export class PlanningController {
     @Req() req: { user: { id: string } },
   ) {
     return this.milestoneService.remove(projectId, milestoneId, req.user.id);
+  }
+
+  // --- Feuille de route : phases macro du projet ---
+
+  @Get('projects/:projectId/phases')
+  @ApiOperation({ summary: 'Phases du projet (feuille de route)' })
+  listPhases(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.phaseService.list(projectId, req.user.id);
+  }
+
+  @Post('projects/:projectId/phases')
+  @Audit({
+    action: 'phase.create',
+    targetType: 'Project',
+    metadata: (req) => ({ name: (req.body as CreatePhaseDto)?.name }),
+  })
+  @ApiOperation({ summary: 'Créer une phase (ADMIN projet)' })
+  createPhase(
+    @Param('projectId') projectId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreatePhaseDto,
+  ) {
+    return this.phaseService.create(projectId, req.user.id, dto);
+  }
+
+  @Patch('projects/:projectId/phases/:phaseId')
+  @Audit({
+    action: 'phase.update',
+    targetType: 'Project',
+    metadata: (req) => ({
+      phaseId: (req.params as Record<string, string>)?.phaseId,
+    }),
+  })
+  @ApiOperation({ summary: 'Modifier une phase (ADMIN projet)' })
+  updatePhase(
+    @Param('projectId') projectId: string,
+    @Param('phaseId') phaseId: string,
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdatePhaseDto,
+  ) {
+    return this.phaseService.update(projectId, phaseId, req.user.id, dto);
+  }
+
+  @Delete('projects/:projectId/phases/:phaseId')
+  @Audit({
+    action: 'phase.delete',
+    targetType: 'Project',
+    metadata: (req) => ({
+      phaseId: (req.params as Record<string, string>)?.phaseId,
+    }),
+  })
+  @ApiOperation({ summary: 'Supprimer une phase (ADMIN projet)' })
+  deletePhase(
+    @Param('projectId') projectId: string,
+    @Param('phaseId') phaseId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.phaseService.remove(projectId, phaseId, req.user.id);
   }
 
   /** Gantt : données pour la vue calendrier (barres par tâche). Drag & drop = PATCH /tache/:id avec startDate/endDate. */

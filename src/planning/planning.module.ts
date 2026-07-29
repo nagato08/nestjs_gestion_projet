@@ -8,6 +8,7 @@ import { WorkloadService } from './workload.service';
 import { ScheduleService } from './schedule.service';
 import { SprintService } from './sprint.service';
 import { MilestoneService } from './milestone.service';
+import { PhaseService } from './phase.service';
 import { PrismaService } from 'src/prisma.service';
 
 @Module({
@@ -21,6 +22,7 @@ import { PrismaService } from 'src/prisma.service';
     ScheduleService,
     SprintService,
     MilestoneService,
+    PhaseService,
     PrismaService,
   ],
   exports: [
@@ -32,6 +34,7 @@ import { PrismaService } from 'src/prisma.service';
     ScheduleService,
     SprintService,
     MilestoneService,
+    PhaseService,
   ],
 })
 export class PlanningModule {}
