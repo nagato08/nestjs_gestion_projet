@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { ProjectAccessService } from 'src/common/access/project-access.service';
+import { ProjectSettingsService } from 'src/project-settings/project-settings.service';
 
+// Repli pour la charge globale (sans projectId) : aucun ProjectSettings ne
+// s'applique alors, il faut bien une valeur par défaut.
 const DEFAULT_WEEKLY_HOURS = 40;
 const DEFAULT_DAILY_HOURS = 8;
 
@@ -18,16 +20,8 @@ type WorkloadEntry = {
 export class WorkloadService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly projectAccess: ProjectAccessService,
+    private readonly projectSettings: ProjectSettingsService,
   ) {}
-
-  private async ensureProjectAccess(
-    projectId: string,
-    userId: string,
-  ): Promise<void> {
-    // Lecture seule : tout membre du projet, y compris VIEWER.
-    await this.projectAccess.requireMember(projectId, userId);
-  }
 
   async getWorkload(
     userId: string,
@@ -39,10 +33,23 @@ export class WorkloadService {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    if (projectId) await this.ensureProjectAccess(projectId, userId);
+    // `getSettings` vérifie déjà l'accès (requireMember) : pas besoin d'un
+    // second appel à `ensureProjectAccess` en plus.
+    const settings = projectId
+      ? await this.projectSettings.getSettings(projectId, userId)
+      : null;
 
-    const overloadThresholdHours =
-      groupBy === 'week' ? DEFAULT_WEEKLY_HOURS : DEFAULT_DAILY_HOURS;
+    // Sans projet (vue globale), aucun calendrier ne s'applique : on retombe
+    // sur les constantes historiques. Avec un projet, ses propres réglages
+    // priment — un chantier à 10h/jour n'a pas le même seuil de surcharge
+    // qu'un projet de bureau à 8h/jour.
+    const overloadThresholdHours = settings
+      ? groupBy === 'week'
+        ? settings.hoursPerDay * settings.workingDays.length
+        : settings.hoursPerDay
+      : groupBy === 'week'
+        ? DEFAULT_WEEKLY_HOURS
+        : DEFAULT_DAILY_HOURS;
 
     // 1. Récupérer tous les membres concernés (du projet si fourni, sinon ceux ayant pointé)
     const projectMembers = projectId

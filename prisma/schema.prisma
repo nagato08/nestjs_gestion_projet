@@ -192,6 +192,7 @@ model Project {
   documents    Document[]
   conversation Conversation?
   invitations  ProjectInvitation[]
+  settings     ProjectSettings?
   sprints      Sprint[]
   milestones   Milestone[]
 
@@ -506,6 +507,59 @@ model Milestone {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+/// Paramètres de pilotage d'un projet : calendrier ouvré, seuils d'alerte,
+/// configuration générale. Créé paresseusement à la première consultation
+/// (même motif que CompanySettings), pour ne pas forcer une ligne inutile
+/// sur des projets qui ne personnalisent jamais leurs seuils.
+model ProjectSettings {
+  id        String  @id @default(cuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // --- Calendrier ouvré ---
+  /// Heures travaillées par jour. Base du calcul de charge (homme·jour) et
+  /// du seuil de surcharge journalier.
+  hoursPerDay Float @default(8)
+  /// Jours ouvrés de la semaine, 0 = dimanche … 6 = samedi.
+  /// Défaut : lundi à vendredi.
+  workingDays Int[] @default([1, 2, 3, 4, 5])
+  /// Jours fériés ou de fermeture propres au projet — un chantier au Cameroun
+  /// et un projet en France n'observent pas le même calendrier.
+  publicHolidays DateTime[] @default([])
+  /// Capacité machine disponible par jour, en heures. 0 = ressource machine
+  /// non suivie sur ce projet (cas par défaut, la majorité des projets n'en
+  /// ont pas besoin).
+  machineCapacityPerDay Float @default(0)
+
+  // --- Seuils d'alerte ---
+  /// Une tâche est signalée « à risque » quand il lui reste au plus ce
+  /// nombre de jours avant son échéance sans être terminée.
+  lateAlertThresholdDays Int @default(2)
+  /// Budget prévisionnel du projet. Optionnel : un projet interne sans
+  /// facturation n'a souvent aucun budget à suivre.
+  budgetAmount Float?
+  currency     String @default("EUR")
+
+  // --- Configuration générale ---
+  methodology ProjectMethodology @default(AGILE)
+  /// Unité d'affichage des rapports de charge : heures brutes, ou
+  /// homme·jour — plus parlant pour un chef de projet côté planification.
+  chargeUnit ChargeUnit @default(HOURS)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ProjectMethodology {
+  AGILE
+  CLASSIC
+}
+
+enum ChargeUnit {
+  HOURS
+  PERSON_DAYS
 }
 
 model TaskAssignment {

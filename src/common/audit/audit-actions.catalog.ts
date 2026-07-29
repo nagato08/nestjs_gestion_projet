@@ -68,6 +68,14 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     severity: 'critical',
     category: 'Projet',
   },
+  {
+    action: 'project.settings.update',
+    label: 'Modification des paramètres de pilotage',
+    description:
+      'Le calendrier ouvré, les seuils d’alerte ou la configuration générale du projet ont été modifiés.',
+    severity: 'warning',
+    category: 'Projet',
+  },
 
   // --- Membres ---
   {
