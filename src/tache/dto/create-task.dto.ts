@@ -91,6 +91,18 @@ export class CreateTaskDto {
   parentId?: string;
 
   @ApiProperty({
+    example: 'cuid_phase_id',
+    description:
+      'Phase de la feuille de route à laquelle rattacher la tâche (optionnel)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({
+    message: "L'identifiant de la phase doit être une chaîne de caractères",
+  })
+  phaseId?: string;
+
+  @ApiProperty({
     example: ['cuid_user_1', 'cuid_user_2'],
     description:
       'Liste des IDs des utilisateurs à assigner à la tâche lors de la création',

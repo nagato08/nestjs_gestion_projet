@@ -310,6 +310,13 @@ model Task {
   sprintId String?
   sprint   Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
+  // Phase de la feuille de route à laquelle la tâche appartient (optionnel).
+  // Distinct du sprint : la phase situe la tâche dans le cycle de vie macro
+  // du projet, le sprint dans son exécution au jour le jour. Une tâche peut
+  // porter les deux à la fois.
+  phaseId String?
+  phase   Phase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
   // PERT : estimations pour te = (o + 4m + p) / 6 (en jours)
   optimisticDays  Int?
   probableDays    Int?
@@ -343,6 +350,7 @@ model Task {
   updatedAt DateTime @updatedAt
 
   @@index([sprintId])
+  @@index([phaseId])
   @@index([recurrenceOfId])
   @@index([completedAt])
 }
@@ -583,6 +591,8 @@ model Phase {
   /// qui se chevauchent (ex. recette qui démarre avant la fin du
   /// développement) doivent quand même s'afficher dans un ordre stable.
   order Int @default(0)
+
+  tasks Task[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

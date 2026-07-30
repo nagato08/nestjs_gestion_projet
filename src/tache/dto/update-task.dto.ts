@@ -81,4 +81,18 @@ export class UpdateTaskDto {
   @IsInt({ message: 'Les story points doivent être un entier' })
   @Min(0, { message: 'Les story points ne peuvent pas être négatifs' })
   storyPoints?: number;
+
+  @ApiProperty({
+    example: 'cuid_phase_id',
+    description:
+      'Phase de la feuille de route à laquelle rattacher la tâche. ' +
+      'Chaîne vide ou null pour la détacher.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString({
+    message: "L'identifiant de la phase doit être une chaîne de caractères",
+  })
+  phaseId?: string | null;
 }

@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectRole } from '@prisma/client';
+import { ProjectRole, TaskStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
 import { CreatePhaseDto } from './dto/create-phase.dto';
@@ -20,13 +20,47 @@ export class PhaseService {
     private readonly projectAccess: ProjectAccessService,
   ) {}
 
+  /**
+   * Avancement d'une phase, toujours compté en nombre de tâches.
+   *
+   * Contrairement au sprint, une phase peut s'étendre sur plusieurs sprints
+   * à l'usage des points hétérogène : mélanger des tâches estimées et
+   * d'autres non estimées produirait un pourcentage sans signification.
+   */
+  private summarize(tasks: { status: TaskStatus }[], endDate: Date) {
+    const doneCount = tasks.filter((t) => t.status === TaskStatus.DONE).length;
+    const progressPercent =
+      tasks.length > 0 ? Math.round((doneCount / tasks.length) * 100) : 0;
+
+    return {
+      taskCount: tasks.length,
+      doneCount,
+      progressPercent,
+      // En retard : l'échéance est dépassée et du travail reste à faire.
+      // Une phase sans aucune tâche n'est jamais en retard — il n'y a rien
+      // à y avoir manqué.
+      isLate:
+        tasks.length > 0 &&
+        progressPercent < 100 &&
+        endDate.getTime() < Date.now(),
+    };
+  }
+
   async list(projectId: string, userId: string) {
     await this.projectAccess.requireMember(projectId, userId);
 
-    return this.prisma.phase.findMany({
+    const phases = await this.prisma.phase.findMany({
       where: { projectId },
       orderBy: [{ order: 'asc' }, { startDate: 'asc' }],
+      include: {
+        tasks: { select: { status: true } },
+      },
     });
+
+    return phases.map(({ tasks, ...phase }) => ({
+      ...phase,
+      ...this.summarize(tasks, phase.endDate),
+    }));
   }
 
   async create(projectId: string, userId: string, dto: CreatePhaseDto) {

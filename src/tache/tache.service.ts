@@ -137,9 +137,33 @@ export class TacheService {
   }
 
   // 1️⃣ Créer une tâche
+  /**
+   * Vérifie qu'une phase existe et appartient au projet donné.
+   *
+   * Sans ce contrôle, rien n'empêcherait de rattacher une tâche à la phase
+   * d'un autre projet — l'identifiant seul ne suffit pas à le garantir.
+   */
+  private async verifyPhaseBelongsToProject(
+    phaseId: string,
+    projectId: string,
+  ): Promise<void> {
+    const phase = await this.prisma.phase.findUnique({
+      where: { id: phaseId },
+      select: { projectId: true },
+    });
+    if (!phase) throw new NotFoundException('Phase introuvable');
+    if (phase.projectId !== projectId) {
+      throw new ConflictException('La phase doit appartenir au même projet');
+    }
+  }
+
   async createTask(userId: string, dto: CreateTaskDto) {
     // Seul ADMIN ou chef du projet peut créer
     await this.verifyProjectManagerAccess(dto.projectId, userId);
+
+    if (dto.phaseId) {
+      await this.verifyPhaseBelongsToProject(dto.phaseId, dto.projectId);
+    }
 
     // Si parentId est fourni, vérifier que la tâche parent existe et appartient au même projet
     if (dto.parentId) {
@@ -211,6 +235,7 @@ export class TacheService {
       storyPoints: dto.storyPoints ?? null,
       projectId: dto.projectId,
       parentId: dto.parentId,
+      phaseId: dto.phaseId ?? null,
       status: TaskStatus.TODO,
       assignments:
         dto.assignedUserIds && dto.assignedUserIds.length > 0
@@ -451,7 +476,14 @@ export class TacheService {
 
   // 4️⃣ Mettre à jour une tâche
   async updateTask(taskId: string, userId: string, dto: UpdateTaskDto) {
-    await this.verifyTaskContributorAccess(taskId, userId);
+    const { projectId } = await this.verifyTaskContributorAccess(
+      taskId,
+      userId,
+    );
+
+    if (dto.phaseId) {
+      await this.verifyPhaseBelongsToProject(dto.phaseId, projectId);
+    }
 
     const updateData: any = {};
     if (dto.title !== undefined) updateData.title = dto.title;
@@ -478,6 +510,9 @@ export class TacheService {
     }
     if (dto.storyPoints !== undefined) {
       updateData.storyPoints = dto.storyPoints;
+    }
+    if (dto.phaseId !== undefined) {
+      updateData.phaseId = dto.phaseId || null;
     }
 
     // Le statut est modifiable par cette route aussi : completedAt doit y

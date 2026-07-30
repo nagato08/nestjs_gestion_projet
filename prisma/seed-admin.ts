@@ -47,7 +47,11 @@ async function main() {
       select: { id: true, email: true, role: true },
     });
 
-    console.log('✓ Admin prêt :', admin.email, `(${admin.role}, id=${admin.id})`);
+    console.log(
+      '✓ Admin prêt :',
+      admin.email,
+      `(${admin.role}, id=${admin.id})`,
+    );
     console.log('  Mot de passe :', password);
     console.log('  → Change-le après la première connexion.');
   } finally {

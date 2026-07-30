@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { TaskStatus } from '@prisma/client';
 import { PhaseService } from './phase.service';
 import { PrismaService } from 'src/prisma.service';
 import { ProjectAccessService } from 'src/common/access/project-access.service';
@@ -51,6 +52,108 @@ describe('Phases de la feuille de route', () => {
         orderBy: [{ order: 'asc' }, { startDate: 'asc' }],
       }),
     );
+  });
+
+  describe('avancement', () => {
+    /** Phase dont l'échéance est déjà passée, avec les tâches fournies. */
+    function pastPhase(tasks: { status: TaskStatus }[]) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - 5);
+      return { id: PHASE_ID, projectId: PROJECT_ID, endDate, tasks };
+    }
+
+    it('compte toujours en tâches, jamais en points', async () => {
+      // Une phase peut couvrir plusieurs sprints à l'usage des points
+      // hétérogène : mélanger ces échelles produirait un pourcentage sans
+      // signification. Le résultat ne doit donc jamais dépendre de
+      // storyPoints, qui n'est même pas sélectionné par la requête.
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([
+        {
+          id: PHASE_ID,
+          projectId: PROJECT_ID,
+          endDate: new Date(Date.now() + 86_400_000),
+          tasks: [
+            { status: TaskStatus.DONE },
+            { status: TaskStatus.DONE },
+            { status: TaskStatus.TODO },
+            { status: TaskStatus.DOING },
+          ],
+        },
+      ]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.taskCount).toBe(4);
+      expect(result.doneCount).toBe(2);
+      expect(result.progressPercent).toBe(50);
+    });
+
+    it('affiche 0 % pour une phase sans aucune tâche', async () => {
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([
+        {
+          id: PHASE_ID,
+          projectId: PROJECT_ID,
+          endDate: new Date(),
+          tasks: [],
+        },
+      ]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.progressPercent).toBe(0);
+    });
+
+    it('signale en retard une phase échue avec du travail restant', async () => {
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([
+        pastPhase([{ status: TaskStatus.DONE }, { status: TaskStatus.TODO }]),
+      ]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.isLate).toBe(true);
+    });
+
+    it('ne signale pas de retard si toutes les tâches sont terminées', async () => {
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([
+        pastPhase([{ status: TaskStatus.DONE }, { status: TaskStatus.DONE }]),
+      ]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.isLate).toBe(false);
+    });
+
+    it('ne signale jamais en retard une phase sans aucune tâche', async () => {
+      // Une phase vide n'a rien pu manquer : la signaler en retard serait
+      // trompeur, l'échéance dépassée ne reflète alors qu'une phase jamais
+      // remplie plutôt qu'un vrai dérapage.
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([pastPhase([])]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.isLate).toBe(false);
+    });
+
+    it('ne signale pas de retard tant que l’échéance n’est pas dépassée', async () => {
+      const { service, prisma } = buildService();
+      prisma.phase.findMany.mockResolvedValue([
+        {
+          id: PHASE_ID,
+          projectId: PROJECT_ID,
+          endDate: new Date(Date.now() + 86_400_000),
+          tasks: [{ status: TaskStatus.TODO }],
+        },
+      ]);
+
+      const [result] = await service.list(PROJECT_ID, USER_ID);
+
+      expect(result.isLate).toBe(false);
+    });
   });
 
   it('refuse une phase dont la fin précède le début', async () => {
