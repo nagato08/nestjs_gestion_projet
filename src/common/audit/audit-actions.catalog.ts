@@ -16,7 +16,8 @@ export type AuditCategory =
   | 'Tâches'
   | 'Documents'
   | 'Comptes'
-  | 'Planning';
+  | 'Planning'
+  | 'Suivi';
 
 export interface AuditActionDescriptor {
   action: string;
@@ -353,6 +354,31 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     description: 'Un utilisateur a exporté ses propres données personnelles.',
     severity: 'info',
     category: 'Comptes',
+  },
+
+  // --- Suivi ---
+  {
+    action: 'issue.create',
+    label: 'Signalement de difficulté',
+    description:
+      'Une difficulté a été signalée sur le projet, éventuellement rattachée à une tâche précise.',
+    severity: 'warning',
+    category: 'Suivi',
+  },
+  {
+    action: 'issue.update',
+    label: 'Suivi de difficulté',
+    description:
+      'Le statut ou l’action corrective d’une difficulté signalée a été mis à jour.',
+    severity: 'info',
+    category: 'Suivi',
+  },
+  {
+    action: 'issue.delete',
+    label: 'Suppression de difficulté',
+    description: 'Un signalement de difficulté a été retiré.',
+    severity: 'warning',
+    category: 'Suivi',
   },
 ];
 

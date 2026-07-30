@@ -84,6 +84,8 @@ model User {
   refreshTokens RefreshToken[]
 
   auditLogs AuditLog[]
+
+  reportedIssues ProjectIssue[]
 }
 
 // =========================================================
@@ -196,6 +198,7 @@ model Project {
   phases       Phase[]
   sprints      Sprint[]
   milestones   Milestone[]
+  issues       ProjectIssue[]
 
   createdAt DateTime @default(now())
 }
@@ -336,6 +339,7 @@ model Task {
 
   assignments TaskAssignment[]
   comments    Comment[]
+  issues      ProjectIssue[]
   timeEntries TimeEntry[]
   checklist   ChecklistItem[]
 
@@ -569,6 +573,60 @@ enum ProjectMethodology {
 enum ChargeUnit {
   HOURS
   PERSON_DAYS
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+/// Difficulté signalée sur un projet, éventuellement sur une tâche précise.
+///
+/// Distinct du journal d'audit : l'audit trace ce que le système a fait
+/// techniquement, ce modèle trace ce qu'un humain juge problématique et ce
+/// qu'on fait pour y remédier. Signalé par quiconque contribue au projet —
+/// c'est la personne qui bute sur un blocage qui le connaît en premier — mais
+/// visible en lecture par tout membre, y compris VIEWER : la transparence sur
+/// les difficultés d'un projet ne se réserve pas aux seuls gestionnaires.
+model ProjectIssue {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Facultative : une difficulté peut concerner le projet dans son ensemble
+  /// (ex. « fournisseur en retard ») sans être rattachable à une tâche.
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?       @db.Text
+  severity    IssueSeverity @default(MEDIUM)
+  status      IssueStatus   @default(OPEN)
+
+  /// Renseignée par un gestionnaire à mesure que le problème se résout.
+  correctiveAction String? @db.Text
+
+  reportedById String
+  reportedBy   User   @relation(fields: [reportedById], references: [id])
+
+  /// Figée au passage en RESOLVED, sur le même principe que
+  /// Task.completedAt : ne doit plus bouger après coup, sans quoi la mesure
+  /// du délai de résolution deviendrait fausse.
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([taskId])
 }
 
 /// Regroupement macro d'un projet — une phase (« conception », « recette »,

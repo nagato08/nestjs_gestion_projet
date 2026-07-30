@@ -14,6 +14,8 @@ import { NotificationModule } from './notification/notification.module';
 import { TimeEntryModule } from './time-entry/time-entry.module';
 import { CompanySettingsModule } from './company-settings/company-settings.module';
 import { ProjectSettingsModule } from './project-settings/project-settings.module';
+import { ProjectIssueModule } from './project-issue/project-issue.module';
+import { StatusReportModule } from './status-report/status-report.module';
 import { NotificationSettingsModule } from './notification-settings/notification-settings.module';
 import { PlanningModule } from './planning/planning.module';
 import { SearchModule } from './search/search.module';
@@ -42,6 +44,8 @@ import { HealthController } from './health/health.controller';
     ProjectModule,
     TacheModule,
     ProjectSettingsModule,
+    ProjectIssueModule,
+    StatusReportModule,
     DocumentModule,
     NotificationModule,
     TimeEntryModule,
