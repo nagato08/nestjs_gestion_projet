@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AbsenceType, Role, TaskStatus } from '@prisma/client';
+import { AbsenceStatus, AbsenceType, Role, TaskStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { AbsenceService } from './absence.service';
 
@@ -24,6 +24,8 @@ export interface CalendarEvent {
   /** Renseignés pour les absences uniquement. */
   userName: string | null;
   absenceType: AbsenceType | null;
+  /** Une demande encore en attente ne vaut pas une absence acquise. */
+  absenceStatus: AbsenceStatus | null;
 }
 
 @Injectable()
@@ -95,6 +97,7 @@ export class CalendarService {
       status: task.status,
       userName: null,
       absenceType: null,
+      absenceStatus: null,
     }));
 
     for (const absence of absences) {
@@ -109,6 +112,7 @@ export class CalendarService {
         status: null,
         userName: null,
         absenceType: absence.type,
+        absenceStatus: absence.status,
       });
     }
 
@@ -196,6 +200,7 @@ export class CalendarService {
         status: task.status,
         userName: null,
         absenceType: null,
+        absenceStatus: null,
       });
     }
 
@@ -211,6 +216,7 @@ export class CalendarService {
         status: null,
         userName: null,
         absenceType: null,
+        absenceStatus: null,
       });
     }
 
@@ -226,6 +232,7 @@ export class CalendarService {
         status: null,
         userName: null,
         absenceType: null,
+        absenceStatus: null,
       });
     }
 
@@ -241,6 +248,7 @@ export class CalendarService {
         status: null,
         userName: `${absence.user.firstName} ${absence.user.lastName}`,
         absenceType: absence.type,
+        absenceStatus: absence.status,
       });
     }
 

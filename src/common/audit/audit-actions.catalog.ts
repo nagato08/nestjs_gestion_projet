@@ -407,6 +407,14 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     severity: 'info',
     category: 'Agenda',
   },
+  {
+    action: 'absence.decide',
+    label: 'Décision sur une demande d’absence',
+    description:
+      'Une demande d’indisponibilité a été approuvée ou refusée par un chef de projet ou un administrateur.',
+    severity: 'warning',
+    category: 'Agenda',
+  },
 ];
 
 /** Index par code d'action, pour un accès direct. */

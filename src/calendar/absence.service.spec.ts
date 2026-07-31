@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { AbsenceStatus, Role } from '@prisma/client';
 import { AbsenceService } from './absence.service';
 import { PrismaService } from 'src/prisma.service';
 
@@ -145,6 +146,129 @@ describe('Modification et suppression', () => {
     await expect(service.remove(ABSENCE_ID, USER_ID)).rejects.toThrow(
       NotFoundException,
     );
+  });
+});
+
+describe('Validation d’une demande', () => {
+  it('soumet toute nouvelle demande en attente', async () => {
+    const { service, prisma } = buildService();
+
+    await service.create(USER_ID, {
+      startDate: '2026-08-10',
+      endDate: '2026-08-12',
+    });
+
+    const call = prisma.absence.create.mock.calls[0][0] as {
+      data: { status?: string };
+    };
+    // Le statut n'est pas passé explicitement : c'est le défaut PENDING du
+    // schéma qui s'applique, jamais une valeur choisie par le demandeur.
+    expect(call.data.status).toBeUndefined();
+  });
+
+  it('refuse la décision à un simple employé', async () => {
+    const { service, prisma } = buildService();
+
+    await expect(
+      service.decide(ABSENCE_ID, OTHER_USER_ID, Role.EMPLOYEE, {
+        status: AbsenceStatus.APPROVED,
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.absence.update).not.toHaveBeenCalled();
+  });
+
+  it('interdit de traiter sa propre demande, même à un administrateur', async () => {
+    // Une validation que le demandeur peut s'accorder lui-même ne vaut rien.
+    const { service, prisma } = buildService();
+    prisma.absence.findUnique.mockResolvedValue({
+      id: ABSENCE_ID,
+      userId: USER_ID,
+    });
+
+    await expect(
+      service.decide(ABSENCE_ID, USER_ID, Role.ADMIN, {
+        status: AbsenceStatus.APPROVED,
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.absence.update).not.toHaveBeenCalled();
+  });
+
+  it('enregistre qui a tranché et quand', async () => {
+    const { service, prisma } = buildService();
+    prisma.absence.findUnique.mockResolvedValue({
+      id: ABSENCE_ID,
+      userId: USER_ID,
+    });
+
+    await service.decide(ABSENCE_ID, OTHER_USER_ID, Role.PROJECT_MANAGER, {
+      status: AbsenceStatus.REJECTED,
+      decisionNote: 'Période déjà couverte par deux absences',
+    });
+
+    const call = prisma.absence.update.mock.calls[0][0] as {
+      data: { status: string; approverId: string; decidedAt: Date };
+    };
+    expect(call.data.status).toBe(AbsenceStatus.REJECTED);
+    expect(call.data.approverId).toBe(OTHER_USER_ID);
+    expect(call.data.decidedAt).toBeInstanceOf(Date);
+  });
+
+  it('repasse en attente dès que le demandeur change les dates', async () => {
+    // Un accord portait sur des dates précises : il ne peut pas suivre
+    // silencieusement une période modifiée après coup.
+    const { service, prisma } = buildService();
+    prisma.absence.findUnique.mockResolvedValue({
+      id: ABSENCE_ID,
+      userId: USER_ID,
+      startDate: new Date('2026-08-10T00:00:00Z'),
+      endDate: new Date('2026-08-12T23:59:59Z'),
+    });
+
+    await service.update(ABSENCE_ID, USER_ID, { endDate: '2026-08-20' });
+
+    const call = prisma.absence.update.mock.calls[0][0] as {
+      data: { status: string; approverId: null; decidedAt: null };
+    };
+    expect(call.data.status).toBe(AbsenceStatus.PENDING);
+    expect(call.data.approverId).toBeNull();
+    expect(call.data.decidedAt).toBeNull();
+  });
+
+  it('n’oppose pas une demande refusée à une nouvelle sur la même période', async () => {
+    // Un refus ne réserve pas la période : on doit pouvoir redéposer dessus.
+    const { service, prisma } = buildService();
+
+    await service.create(USER_ID, {
+      startDate: '2026-08-10',
+      endDate: '2026-08-12',
+    });
+
+    const call = prisma.absence.findFirst.mock.calls[0][0] as {
+      where: { status: { not: string } };
+    };
+    expect(call.where.status.not).toBe(AbsenceStatus.REJECTED);
+  });
+
+  it('écarte les demandes refusées de l’agenda de l’équipe', async () => {
+    const { service, prisma } = buildService();
+
+    await service.listForUsers([OTHER_USER_ID], '2026-08-01', '2026-08-31');
+
+    const call = prisma.absence.findMany.mock.calls[0][0] as {
+      where: { status: { not: string } };
+    };
+    expect(call.where.status.not).toBe(AbsenceStatus.REJECTED);
+  });
+
+  it('exclut ses propres demandes de la file à traiter', async () => {
+    const { service, prisma } = buildService();
+
+    await service.listPending(USER_ID, Role.ADMIN);
+
+    const call = prisma.absence.findMany.mock.calls[0][0] as {
+      where: { userId: { not: string } };
+    };
+    expect(call.where.userId.not).toBe(USER_ID);
   });
 });
 

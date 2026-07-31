@@ -20,6 +20,7 @@ import { AbsenceService } from './absence.service';
 import { CalendarRangeDto } from './dto/calendar-range.dto';
 import { CreateAbsenceDto } from './dto/create-absence.dto';
 import { UpdateAbsenceDto } from './dto/update-absence.dto';
+import { DecideAbsenceDto } from './dto/decide-absence.dto';
 
 @ApiTags('Agenda')
 @ApiBearerAuth()
@@ -93,6 +94,40 @@ export class CalendarController {
     @Body() dto: UpdateAbsenceDto,
   ) {
     return this.absenceService.update(absenceId, req.user.id, dto);
+  }
+
+  @Get('absences/pending')
+  @ApiOperation({
+    summary:
+      'Demandes en attente de décision (chefs de projet et administrateurs)',
+  })
+  listPendingAbsences(@Req() req: any) {
+    return this.absenceService.listPending(req.user.id, req.user.role);
+  }
+
+  @Patch('absences/:absenceId/decision')
+  @Audit({
+    action: 'absence.decide',
+    targetType: 'User',
+    metadata: (req) => ({
+      absenceId: (req.params as Record<string, string>)?.absenceId,
+      status: (req.body as DecideAbsenceDto)?.status,
+    }),
+  })
+  @ApiOperation({
+    summary: 'Approuver ou refuser une demande (jamais la sienne)',
+  })
+  decideAbsence(
+    @Param('absenceId') absenceId: string,
+    @Req() req: any,
+    @Body() dto: DecideAbsenceDto,
+  ) {
+    return this.absenceService.decide(
+      absenceId,
+      req.user.id,
+      req.user.role,
+      dto,
+    );
   }
 
   @Delete('absences/:absenceId')
