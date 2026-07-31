@@ -31,7 +31,12 @@ export class WorkloadService {
     groupBy: 'day' | 'week' = 'day',
   ) {
     const start = new Date(startDate);
+    // Borne haute du jour : sans ceci, `endDate` (une date sans heure) vaut
+    // minuit et exclut tout pointage fait plus tard dans la journée même —
+    // typiquement, toute heure enregistrée aujourd'hui n'apparaît jamais.
+    // Même correctif que le burndown (`burndown.service.ts`).
     const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     // `getSettings` vérifie déjà l'accès (requireMember) : pas besoin d'un
     // second appel à `ensureProjectAccess` en plus.

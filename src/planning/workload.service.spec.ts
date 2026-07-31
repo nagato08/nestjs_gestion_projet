@@ -82,3 +82,24 @@ describe('Seuil de surcharge', () => {
     expect(result.overloadThresholdHours).toBe(8);
   });
 });
+
+describe('Bornes de la période', () => {
+  it("étend la date de fin à la fin de journée pour inclure les pointages du jour même", async () => {
+    const { service } = buildService(null);
+    const prisma = (
+      service as unknown as { prisma: { timeEntry: { findMany: jest.Mock } } }
+    ).prisma;
+
+    await service.getWorkload(USER_ID, '2026-01-01', '2026-01-07');
+
+    const call = prisma.timeEntry.findMany.mock.calls[0][0] as {
+      where: { endTime: { lte: Date } };
+    };
+    const upperBound = call.where.endTime.lte;
+
+    // Minuit exclurait tout pointage fait plus tard le 7 janvier — celui
+    // qu'on vient justement de créer aujourd'hui.
+    expect(upperBound.getHours()).toBe(23);
+    expect(upperBound.getMinutes()).toBe(59);
+  });
+});
