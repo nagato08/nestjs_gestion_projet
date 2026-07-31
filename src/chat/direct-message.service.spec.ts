@@ -50,7 +50,11 @@ function buildService() {
   };
 
   const emit = jest.fn();
-  const socketService = { server: { to: jest.fn(() => ({ emit })) } };
+  // Le paramètre est typé explicitement : sans lui, TypeScript déduit une
+  // liste d'arguments vide et `calls[0][0]` devient inaccessible.
+  const socketService = {
+    server: { to: jest.fn((room: string) => ({ emit, room })) },
+  };
   const notificationService = {
     createNotification: jest.fn().mockResolvedValue({}),
   };
@@ -191,7 +195,7 @@ describe('Envoi d’un message direct', () => {
       content: 'Bonjour',
     });
 
-    const rooms = socketService.server.to.mock.calls.map((c) => c[0] as string);
+    const rooms = socketService.server.to.mock.calls.map(([room]) => room);
     expect(rooms).toEqual([`user:${ME}`, `user:${OTHER}`]);
 
     // On ne se notifie pas soi-même de son propre message.
