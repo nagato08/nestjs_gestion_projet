@@ -12,6 +12,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
+import { ConversationType } from '@prisma/client';
 import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import { SocketService } from './socket/socket.service';
 import { PrismaService } from './prisma.service';
@@ -208,11 +209,17 @@ export class AppGateway
     const userId = this.getUserId(socket);
     if (!conversationId || !userId) return;
 
-    // Une conversation appartient à un projet : on exige d'en être membre,
-    // sinon n'importe qui pourrait écouter la room d'un projet fermé.
+    // Deux natures de conversation, deux règles d'accès : un canal de projet
+    // se lit en tant que membre du projet, un fil direct en tant que
+    // participant. Sans cette distinction, un fil direct — qui n'a pas de
+    // projet — deviendrait rejoignable par n'importe qui.
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { projectId: true },
+      select: {
+        type: true,
+        projectId: true,
+        participants: { select: { userId: true } },
+      },
     });
 
     if (!conversation) {
@@ -220,12 +227,16 @@ export class AppGateway
       return;
     }
 
-    const isMember = await this.verifyProjectMembership(
-      conversation.projectId,
-      userId,
-    );
-    if (!isMember) {
-      socket.emit('error', { message: "Vous n'avez pas accès à ce projet" });
+    const allowed =
+      conversation.type === ConversationType.DIRECT
+        ? conversation.participants.some((p) => p.userId === userId)
+        : conversation.projectId !== null &&
+          (await this.verifyProjectMembership(conversation.projectId, userId));
+
+    if (!allowed) {
+      socket.emit('error', {
+        message: "Vous n'avez pas accès à cette conversation",
+      });
       return;
     }
 

@@ -87,7 +87,10 @@ model User {
 
   reportedIssues ProjectIssue[]
 
-  absences Absence[]
+  absences         Absence[] @relation("AbsenceAuthor")
+  absencesDecided  Absence[] @relation("AbsenceApprover")
+
+  conversationsJoined ConversationParticipant[]
 }
 
 // =========================================================
@@ -785,13 +788,49 @@ model NotificationSettings {
 // 9. CHAT TEMPS RÉEL (CONVERSATIONS)
 // =========================================================
 
+/// Un canal de projet, ou un fil entre deux personnes.
+enum ConversationType {
+  PROJECT
+  DIRECT
+}
+
 model Conversation {
-  id        String   @id @default(cuid())
-  projectId String   @unique
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id   String           @id @default(cuid())
+  type ConversationType @default(PROJECT)
+
+  /// Renseigné pour un canal de projet, nul pour une messagerie directe.
+  /// PostgreSQL tolère plusieurs NULL sous une contrainte d'unicité : un
+  /// projet garde donc son canal unique, sans brider le nombre de fils
+  /// directs.
+  projectId String?  @unique
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Peuplé pour les fils directs seulement. L'appartenance à un canal de
+  /// projet reste portée par `ProjectMember` : la dupliquer ici ferait deux
+  /// sources de vérité sur qui a le droit de lire.
+  participants ConversationParticipant[]
+
   messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([type])
+}
+
+/// Participant d'un fil direct.
+model ConversationParticipant {
+  id String @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 model ChatMessage {
@@ -854,17 +893,24 @@ enum AbsenceType {
   OTHER
 }
 
-/// Période pendant laquelle une personne n'est pas disponible normalement.
+/// Suite donnée à une demande d'indisponibilité.
+enum AbsenceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Demande d'indisponibilité, soumise à validation.
 ///
-/// Déclarative, sans circuit de validation : l'outil sert à ce que l'équipe
-/// sache qui est là quand, pas à tenir un registre RH opposable. Chacun
-/// déclare ses propres périodes ; tout le monde les voit sur l'agenda
-/// d'organisation, sans le motif, qui reste privé à son auteur.
+/// Chacun déclare ses propres périodes ; un chef de projet ou un
+/// administrateur les approuve ou les refuse. Tout le monde voit les périodes
+/// retenues sur l'agenda d'organisation, sans le motif, qui reste privé à son
+/// auteur.
 model Absence {
   id String @id @default(cuid())
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("AbsenceAuthor", fields: [userId], references: [id], onDelete: Cascade)
 
   type AbsenceType @default(LEAVE)
 
@@ -876,9 +922,25 @@ model Absence {
   /// Facultatif et jamais exposé aux autres utilisateurs.
   reason String? @db.Text
 
+  status AbsenceStatus @default(PENDING)
+
+  /// Qui a tranché. Conservé même si la demande est ensuite rouverte, jusqu'à
+  /// la décision suivante qui l'écrase.
+  approverId String?
+  approver   User?   @relation("AbsenceApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  /// Figée au moment de la décision, sur le même principe que
+  /// `Task.completedAt` : elle ne doit plus bouger ensuite, sans quoi le délai
+  /// de traitement d'une demande deviendrait faux.
+  decidedAt DateTime?
+
+  /// Motif du refus, ou remarque accompagnant l'accord. Visible du demandeur.
+  decisionNote String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([startDate, endDate])
+  @@index([status])
 }

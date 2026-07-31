@@ -21,7 +21,7 @@ export interface ChatAttachmentInput {
  * et la lecture : les deux doivent renvoyer exactement la même forme, sinon
  * le message qui apparaît en direct diffère de celui rechargé.
  */
-const CHAT_MESSAGE_SELECT = {
+export const CHAT_MESSAGE_SELECT = {
   id: true,
   content: true,
   createdAt: true,
