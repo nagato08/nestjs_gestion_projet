@@ -17,7 +17,8 @@ export type AuditCategory =
   | 'Documents'
   | 'Comptes'
   | 'Planning'
-  | 'Suivi';
+  | 'Suivi'
+  | 'Agenda';
 
 export interface AuditActionDescriptor {
   action: string;
@@ -379,6 +380,32 @@ export const AUDIT_ACTION_CATALOG: AuditActionDescriptor[] = [
     description: 'Un signalement de difficulté a été retiré.',
     severity: 'warning',
     category: 'Suivi',
+  },
+
+  // --- Agenda ---
+  {
+    action: 'absence.create',
+    label: 'Déclaration d’indisponibilité',
+    description:
+      'Une période d’indisponibilité (congé, maladie, télétravail, formation) a été déclarée et apparaît sur l’agenda de l’organisation.',
+    severity: 'info',
+    category: 'Agenda',
+  },
+  {
+    action: 'absence.update',
+    label: 'Modification d’indisponibilité',
+    description:
+      'Les dates ou la nature d’une période d’indisponibilité déclarée ont été modifiées.',
+    severity: 'info',
+    category: 'Agenda',
+  },
+  {
+    action: 'absence.delete',
+    label: 'Suppression d’indisponibilité',
+    description:
+      'Une période d’indisponibilité déclarée a été retirée de l’agenda.',
+    severity: 'info',
+    category: 'Agenda',
   },
 ];
 

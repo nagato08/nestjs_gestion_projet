@@ -86,6 +86,8 @@ model User {
   auditLogs AuditLog[]
 
   reportedIssues ProjectIssue[]
+
+  absences Absence[]
 }
 
 // =========================================================
@@ -835,4 +837,48 @@ model ChatAttachment {
   createdAt DateTime @default(now())
 
   @@index([messageId])
+}
+
+// =========================================================
+// AGENDA : DISPONIBILITÉS & ABSENCES
+// =========================================================
+
+/// Nature d'une période déclarée. Toutes ne sont pas des absences au sens
+/// strict — le télétravail dit « disponible, mais pas sur site » — d'où le
+/// nom volontairement large de « disponibilité » côté interface.
+enum AbsenceType {
+  LEAVE
+  SICK
+  REMOTE
+  TRAINING
+  OTHER
+}
+
+/// Période pendant laquelle une personne n'est pas disponible normalement.
+///
+/// Déclarative, sans circuit de validation : l'outil sert à ce que l'équipe
+/// sache qui est là quand, pas à tenir un registre RH opposable. Chacun
+/// déclare ses propres périodes ; tout le monde les voit sur l'agenda
+/// d'organisation, sans le motif, qui reste privé à son auteur.
+model Absence {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type AbsenceType @default(LEAVE)
+
+  /// Bornes incluses : une absence d'une seule journée porte la même date
+  /// des deux côtés.
+  startDate DateTime
+  endDate   DateTime
+
+  /// Facultatif et jamais exposé aux autres utilisateurs.
+  reason String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([startDate, endDate])
 }
