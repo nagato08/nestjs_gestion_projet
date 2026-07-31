@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ChargeUnit } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { ProjectSettingsService } from 'src/project-settings/project-settings.service';
 
@@ -15,6 +16,14 @@ type WorkloadEntry = {
   isOverloaded: boolean;
   byPeriod: { date: string; hours: number }[];
 };
+
+type MachinePeriod = { date: string; hours: number; overCapacity: boolean };
+
+/** Convertit des heures brutes vers l'unité d'affichage choisie par le projet. */
+function toUnit(hours: number, unit: ChargeUnit, hoursPerDay: number): number {
+  const value = unit === ChargeUnit.PERSON_DAYS ? hours / hoursPerDay : hours;
+  return Math.round(value * 10) / 10;
+}
 
 @Injectable()
 export class WorkloadService {
@@ -131,6 +140,7 @@ export class WorkloadService {
 
     // 5. Finaliser : trier byPeriod, calculer total, flag surcharge
     let totalHours = 0;
+    const teamPeriodTotals = new Map<string, number>();
     for (const rec of byUser.values()) {
       rec.byPeriod.sort((a, b) => a.date.localeCompare(b.date));
       rec.byPeriod = rec.byPeriod.map((p) => ({
@@ -143,14 +153,71 @@ export class WorkloadService {
         (p) => p.hours > overloadThresholdHours,
       );
       totalHours += rec.hours;
+
+      for (const p of rec.byPeriod) {
+        teamPeriodTotals.set(
+          p.date,
+          (teamPeriodTotals.get(p.date) ?? 0) + p.hours,
+        );
+      }
+    }
+
+    // 6. Capacité machine : seuil collectif, indépendant des individus — un
+    // projet borné par une seule machine ne peut pas dépasser sa capacité
+    // même si dix personnes s'y relaient. 0 = ressource non suivie (défaut).
+    let machine: {
+      capacityPerPeriod: number;
+      byPeriod: MachinePeriod[];
+    } | null = null;
+    if (settings && settings.machineCapacityPerDay > 0) {
+      const capacityPerPeriod =
+        groupBy === 'week'
+          ? settings.machineCapacityPerDay * settings.workingDays.length
+          : settings.machineCapacityPerDay;
+
+      machine = {
+        capacityPerPeriod: toUnit(
+          capacityPerPeriod,
+          settings.chargeUnit,
+          settings.hoursPerDay,
+        ),
+        byPeriod: Array.from(teamPeriodTotals.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, hours]) => ({
+            date,
+            hours: toUnit(hours, settings.chargeUnit, settings.hoursPerDay),
+            overCapacity: hours > capacityPerPeriod,
+          })),
+      };
+    }
+
+    // 7. Unité d'affichage : heures brutes par défaut, ou jour-homme si le
+    // projet l'a choisi — un chef de projet raisonne plus naturellement en
+    // jours qu'en heures pour un rapport de charge. Appliquée en tout dernier :
+    // les comparaisons de surcharge ci-dessus raisonnent toujours en heures.
+    const chargeUnit = settings?.chargeUnit ?? ChargeUnit.HOURS;
+    const hoursPerDay = settings?.hoursPerDay ?? DEFAULT_DAILY_HOURS;
+
+    for (const rec of byUser.values()) {
+      rec.byPeriod = rec.byPeriod.map((p) => ({
+        date: p.date,
+        hours: toUnit(p.hours, chargeUnit, hoursPerDay),
+      }));
+      rec.hours = toUnit(rec.hours, chargeUnit, hoursPerDay);
     }
 
     return {
       startDate: start.toISOString().split('T')[0],
       endDate: end.toISOString().split('T')[0],
       groupBy,
-      overloadThresholdHours,
-      totalHours: Math.round(totalHours * 10) / 10,
+      chargeUnit,
+      overloadThresholdHours: toUnit(
+        overloadThresholdHours,
+        chargeUnit,
+        hoursPerDay,
+      ),
+      totalHours: toUnit(totalHours, chargeUnit, hoursPerDay),
+      machine,
       entries: Array.from(byUser.values()),
     };
   }
