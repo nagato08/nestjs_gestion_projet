@@ -17,6 +17,7 @@ import { ProjectSettingsModule } from './project-settings/project-settings.modul
 import { ProjectIssueModule } from './project-issue/project-issue.module';
 import { StatusReportModule } from './status-report/status-report.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { CallModule } from './call/call.module';
 import { NotificationSettingsModule } from './notification-settings/notification-settings.module';
 import { PlanningModule } from './planning/planning.module';
 import { SearchModule } from './search/search.module';
@@ -48,6 +49,7 @@ import { HealthController } from './health/health.controller';
     ProjectIssueModule,
     StatusReportModule,
     CalendarModule,
+    CallModule,
     DocumentModule,
     NotificationModule,
     TimeEntryModule,

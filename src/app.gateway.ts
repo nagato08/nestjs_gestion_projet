@@ -12,7 +12,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
-import { ConversationType } from '@prisma/client';
+import { CallStatus, ConversationType } from '@prisma/client';
 import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import { SocketService } from './socket/socket.service';
 import { PrismaService } from './prisma.service';
@@ -375,6 +375,55 @@ export class AppGateway
     socket.to(`project:${projectId}`).emit('user:stopped-typing', {
       projectId,
       userId,
+    });
+  }
+
+  /**
+   * Relais de signalisation WebRTC.
+   *
+   * L'audio d'un appel circule directement entre les deux navigateurs ; le
+   * serveur ne transporte que les messages qui leur permettent de se trouver
+   * — description de session (SDP) et candidats réseau (ICE).
+   *
+   * Ces messages sont relayés en aveugle, sans être interprétés, mais jamais
+   * sans contrôle : on vérifie que l'émetteur est bien partie à l'appel avant
+   * de transmettre quoi que ce soit. Sans cette garde, n'importe quel compte
+   * connecté pourrait s'insérer dans la négociation d'un appel entre tiers.
+   */
+  @SubscribeMessage('call:signal')
+  async relayCallSignal(
+    @MessageBody() data: { callId: string; signal: unknown },
+    @ConnectedSocket() socket: AuthSocket,
+  ) {
+    const userId = this.getUserId(socket);
+    if (!userId || !data?.callId || data.signal === undefined) return;
+
+    const call = await this.prisma.call.findUnique({
+      where: { id: data.callId },
+      select: { callerId: true, calleeId: true, status: true },
+    });
+    if (!call) return;
+
+    const isParticipant = call.callerId === userId || call.calleeId === userId;
+    if (!isParticipant) {
+      socket.emit('error', { message: 'Cet appel ne vous concerne pas' });
+      return;
+    }
+
+    // Un appel raccroché ne se renégocie pas : sans cette borne, d'anciens
+    // identifiants d'appel resteraient des canaux de transmission ouverts.
+    if (
+      call.status === CallStatus.MISSED ||
+      call.status === CallStatus.REJECTED
+    ) {
+      return;
+    }
+
+    const peerId = call.callerId === userId ? call.calleeId : call.callerId;
+    this.server.to(`user:${peerId}`).emit('call:signal', {
+      callId: data.callId,
+      fromUserId: userId,
+      signal: data.signal,
     });
   }
 

@@ -91,6 +91,9 @@ model User {
   absencesDecided  Absence[] @relation("AbsenceApprover")
 
   conversationsJoined ConversationParticipant[]
+
+  callsPlaced   Call[] @relation("CallsPlaced")
+  callsReceived Call[] @relation("CallsReceived")
 }
 
 // =========================================================
@@ -811,8 +814,10 @@ model Conversation {
   participants ConversationParticipant[]
 
   messages  ChatMessage[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  calls     Call[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type])
 }
@@ -943,4 +948,57 @@ model Absence {
   @@index([userId])
   @@index([startDate, endDate])
   @@index([status])
+}
+
+// =========================================================
+// APPELS AUDIO (WebRTC)
+// =========================================================
+
+/// Issue d'un appel.
+///
+/// `MISSED` et `REJECTED` se distinguent volontairement : le premier dit que
+/// personne n'a décroché, le second qu'on a décroché pour refuser. Confondus,
+/// ils empêcheraient de savoir s'il faut rappeler.
+enum CallStatus {
+  RINGING
+  ANSWERED
+  MISSED
+  REJECTED
+}
+
+/// Appel audio entre deux personnes.
+///
+/// La conversation elle-même transite en pair-à-pair (WebRTC) : rien de l'audio
+/// ne passe par le serveur, qui ne sert qu'à mettre les deux navigateurs en
+/// relation. Ce modèle ne garde donc que les métadonnées — qui, quand, combien
+/// de temps — jamais le contenu.
+model Call {
+  id String @id @default(cuid())
+
+  /// Fil direct d'où part l'appel. Conservé nul si le fil disparaît : la trace
+  /// de l'appel reste, elle vaut par elle-même.
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  callerId String
+  caller   User   @relation("CallsPlaced", fields: [callerId], references: [id], onDelete: Cascade)
+
+  calleeId String
+  callee   User   @relation("CallsReceived", fields: [calleeId], references: [id], onDelete: Cascade)
+
+  status CallStatus @default(RINGING)
+
+  startedAt DateTime @default(now())
+  /// Renseignée au décrochage. La durée facturable d'un appel se compte à
+  /// partir d'ici, pas de la première sonnerie.
+  answeredAt DateTime?
+  endedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([callerId])
+  @@index([calleeId])
+  @@index([conversationId])
+  @@index([startedAt])
 }
