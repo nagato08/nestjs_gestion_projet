@@ -18,6 +18,7 @@ function buildService() {
   const prisma = {
     user: { findFirst: jest.fn().mockResolvedValue({ id: CALLEE }) },
     call: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn().mockResolvedValue({ id: CALL_ID }),
@@ -98,6 +99,28 @@ describe('Lancement d’un appel', () => {
       BadRequestException,
     );
     expect(prisma.call.create).not.toHaveBeenCalled();
+  });
+
+  it('solde les sonneries abandonnees avant de tester l’occupation', async () => {
+    // Un appel laisse en sonnerie — onglet ferme, micro refuse — bloquait
+    // definitivement tous les appels suivants de ces deux personnes.
+    const { service, prisma } = buildService();
+
+    await service.start(CALLER, CALLEE);
+
+    expect(prisma.call.updateMany).toHaveBeenCalled();
+    const purge = prisma.call.updateMany.mock.calls[0][0] as {
+      where: { status: string; startedAt: { lt: Date } };
+      data: { status: string };
+    };
+    expect(purge.where.status).toBe(CallStatus.RINGING);
+    expect(purge.where.startedAt.lt).toBeInstanceOf(Date);
+    expect(purge.data.status).toBe(CallStatus.MISSED);
+
+    // Le menage precede le test d'occupation, sinon il ne servirait a rien.
+    const purgeOrder = prisma.call.updateMany.mock.invocationCallOrder[0];
+    const busyOrder = prisma.call.findFirst.mock.invocationCallOrder[0];
+    expect(purgeOrder).toBeLessThan(busyOrder);
   });
 
   it('fait sonner le destinataire, et lui seul', async () => {

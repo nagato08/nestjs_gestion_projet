@@ -16,6 +16,14 @@ const PEER_SELECT = {
   avatar: true,
 } as const;
 
+/**
+ * Au-delà de cette durée, une sonnerie sans réponse est tenue pour abandonnée.
+ *
+ * Aucune tâche planifiée ne tourne sur ce projet : le ménage se fait au
+ * prochain appel, à la demande — même principe que la purge de la corbeille.
+ */
+const RINGING_TIMEOUT_MS = 60_000;
+
 const CALL_INCLUDE = {
   caller: { select: PEER_SELECT },
   callee: { select: PEER_SELECT },
@@ -65,6 +73,12 @@ export class CallService {
     });
     if (!callee) throw new NotFoundException('Utilisateur introuvable');
 
+    // Un appel abandonné sans raccrochage — onglet fermé, page rechargée,
+    // micro refusé — resterait « en train de sonner » indéfiniment et
+    // bloquerait tous les appels suivants de ces deux personnes. On solde
+    // donc les sonneries périmées avant de tester l'occupation.
+    await this.expireStaleRinging([callerId, calleeId]);
+
     const busy = await this.prisma.call.findFirst({
       where: {
         status: CallStatus.RINGING,
@@ -86,6 +100,23 @@ export class CallService {
 
     this.emitTo(calleeId, 'call:incoming', call);
     return call;
+  }
+
+  /**
+   * Solde les sonneries abandonnées de ces personnes.
+   *
+   * Les marque manquées sans notifier : ce sont des reliquats techniques, pas
+   * des appels que quelqu'un a réellement tenté de joindre à cet instant.
+   */
+  private async expireStaleRinging(userIds: string[]): Promise<void> {
+    await this.prisma.call.updateMany({
+      where: {
+        status: CallStatus.RINGING,
+        startedAt: { lt: new Date(Date.now() - RINGING_TIMEOUT_MS) },
+        OR: [{ callerId: { in: userIds } }, { calleeId: { in: userIds } }],
+      },
+      data: { status: CallStatus.MISSED, endedAt: new Date() },
+    });
   }
 
   /** Appel en cours, vérifié comme appartenant à celui qui agit. */
