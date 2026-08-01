@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AbsenceStatus, Role } from '@prisma/client';
+import { AbsenceStatus, AbsenceType, Role } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
+import { NotificationService } from 'src/notification/notification.service';
 import { CreateAbsenceDto } from './dto/create-absence.dto';
 import { UpdateAbsenceDto } from './dto/update-absence.dto';
 import { DecideAbsenceDto } from './dto/decide-absence.dto';
@@ -17,17 +18,40 @@ const AUTHOR_SELECT = {
   avatar: true,
 } as const;
 
+/** Libellés lisibles, pour le corps des notifications. */
+const TYPE_LABELS: Record<AbsenceType, string> = {
+  LEAVE: 'congé',
+  SICK: 'arrêt maladie',
+  REMOTE: 'télétravail',
+  TRAINING: 'formation',
+  OTHER: 'indisponibilité',
+};
+
+function formatPeriod(start: Date, end: Date): string {
+  const format = (date: Date) =>
+    date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'UTC',
+    });
+  const from = format(start);
+  const to = format(end);
+  return from === to ? `le ${from}` : `du ${from} au ${to}`;
+}
+
 /**
  * Disponibilités déclarées : congés, maladie, télétravail, formation.
  *
- * Chacun ne déclare que pour lui-même — il n'existe pas de circuit de
- * validation, l'outil sert à savoir qui est là quand, pas à arbitrer des
- * demandes. Le motif reste privé : l'équipe a besoin de connaître
- * l'indisponibilité, pas sa raison.
+ * Chacun ne déclare que pour lui-même ; un chef de projet ou un
+ * administrateur approuve ou refuse. Le motif reste privé : l'équipe a besoin
+ * de connaître l'indisponibilité, pas sa raison.
  */
 @Injectable()
 export class AbsenceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   /**
    * Bornes de journée : une absence déclarée le 10 couvre le 10 en entier.
@@ -163,7 +187,13 @@ export class AbsenceService {
 
     const absence = await this.prisma.absence.findUnique({
       where: { id: absenceId },
-      select: { id: true, userId: true },
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        startDate: true,
+        endDate: true,
+      },
     });
     if (!absence) throw new NotFoundException('Demande introuvable');
 
@@ -173,7 +203,7 @@ export class AbsenceService {
       );
     }
 
-    return this.prisma.absence.update({
+    const updated = await this.prisma.absence.update({
       where: { id: absenceId },
       data: {
         status: dto.status,
@@ -181,6 +211,36 @@ export class AbsenceService {
         decidedAt: new Date(),
         decisionNote: dto.decisionNote,
       },
+    });
+
+    void this.notifyDecision(absence, dto);
+
+    return updated;
+  }
+
+  /** Informe le demandeur de la suite donnée, motif du refus compris. */
+  private async notifyDecision(
+    absence: {
+      userId: string;
+      type: AbsenceType;
+      startDate: Date;
+      endDate: Date;
+    },
+    dto: DecideAbsenceDto,
+  ): Promise<void> {
+    const approved = dto.status === AbsenceStatus.APPROVED;
+    const verdict = approved ? 'approuvée' : 'refusée';
+    const period = formatPeriod(absence.startDate, absence.endDate);
+
+    const note = dto.decisionNote?.trim();
+    const content = `Votre demande de ${TYPE_LABELS[absence.type]} ${period} a été ${verdict}${
+      note ? ` : « ${note} »` : ''
+    }`;
+
+    await this.notificationService.createNotification({
+      type: 'ABSENCE_DECIDED',
+      content,
+      userId: absence.userId,
     });
   }
 
@@ -205,7 +265,7 @@ export class AbsenceService {
       );
     }
 
-    return this.prisma.absence.create({
+    const absence = await this.prisma.absence.create({
       data: {
         userId,
         type: dto.type,
@@ -214,6 +274,59 @@ export class AbsenceService {
         reason: dto.reason,
       },
     });
+
+    // Prévenir ceux qui devront trancher, sans bloquer la réponse : le
+    // demandeur n'a pas à attendre l'envoi des notifications pour voir sa
+    // demande enregistrée.
+    void this.notifyApprovers(absence);
+
+    return absence;
+  }
+
+  /**
+   * Signale une nouvelle demande à ceux qui peuvent la traiter.
+   *
+   * Le demandeur en est exclu même s'il fait partie des valideurs : il ne se
+   * validera pas lui-même, la notification n'aurait aucune suite possible.
+   */
+  private async notifyApprovers(absence: {
+    id: string;
+    userId: string;
+    type: AbsenceType;
+    startDate: Date;
+    endDate: Date;
+  }): Promise<void> {
+    const [requester, approvers] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: absence.userId },
+        select: { firstName: true, lastName: true },
+      }),
+      this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          role: { in: [Role.ADMIN, Role.PROJECT_MANAGER] },
+          id: { not: absence.userId },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (approvers.length === 0) return;
+
+    const name = requester
+      ? `${requester.firstName} ${requester.lastName}`
+      : 'Quelqu’un';
+    const content = `${name} demande un ${TYPE_LABELS[absence.type]} ${formatPeriod(absence.startDate, absence.endDate)}`;
+
+    await Promise.all(
+      approvers.map((approver) =>
+        this.notificationService.createNotification({
+          type: 'ABSENCE_REQUESTED',
+          content,
+          userId: approver.id,
+        }),
+      ),
+    );
   }
 
   private async findOwn(absenceId: string, userId: string) {

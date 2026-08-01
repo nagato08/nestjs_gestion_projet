@@ -15,6 +15,8 @@ export class CreateNotificationDto {
       'CHAT_MENTION',
       'DEADLINE_APPROACHING',
       'DEADLINE_PASSED',
+      'ABSENCE_REQUESTED',
+      'ABSENCE_DECIDED',
     ],
   })
   @IsNotEmpty()
