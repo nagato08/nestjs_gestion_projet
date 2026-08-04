@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "db:seed": "ts-node prisma/seed-demo.ts"
+    "db:seed": "ts-node prisma/seed-demo.ts",
+    "db:seed:prod": "node dist/prisma/seed-demo.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

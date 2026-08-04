@@ -5,9 +5,16 @@
  * pour une instance de démonstration ou de développement, jamais pour une base
  * portant de vraies données.
  *
- * Utilisation :
+ * Utilisation en développement :
  *   npm run db:seed              # demande confirmation
- *   npm run db:seed -- --force   # sans confirmation (CI, script)
+ *   npm run db:seed -- --force   # sans confirmation
+ *
+ * Utilisation en production — l'image est construite avec `--omit=dev`, donc
+ * sans ts-node ; c'est la version compilée qu'il faut lancer, et `--force` est
+ * nécessaire car `docker compose exec` n'offre pas toujours d'entrée
+ * interactive pour la confirmation :
+ *   docker compose -f docker-compose.prod.yml exec api \
+ *     node dist/prisma/seed-demo.js --force
  *
  * Le jeu produit est volontairement cohérent : les tâches terminées portent
  * une date de complétion, les jalons atteints une date d'atteinte, les congés
